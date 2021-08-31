@@ -40,6 +40,7 @@ import org.elasticsearch.action.ActionRequest;
 import org.junit.Test;
 import org.mockito.Mockito;
 
+import java.util.HashMap;
 import java.util.List;
 
 import static org.mockito.Mockito.doAnswer;
@@ -90,6 +91,13 @@ public class Elasticsearch7DynamicSinkTest extends TestLogger {
                 .setRestClientFactory(
                         new Elasticsearch7DynamicSink.DefaultRestClientFactory("/myapp"));
         verify(provider.sinkSpy).disableFlushOnCheckpoint();
+        verify(provider.builderSpy)
+                .setConnectionDefaultHeaders(
+                        new HashMap<String, String>() {
+                            {
+                                put("Authorization", "Basic 123");
+                            }
+                        });
     }
 
     @Test
@@ -184,6 +192,9 @@ public class Elasticsearch7DynamicSinkTest extends TestLogger {
                 DummyFailureHandler.class.getName());
         configuration.setString(
                 ElasticsearchConnectorOptions.FLUSH_ON_CHECKPOINT_OPTION.key(), "false");
+        configuration.setString(
+                ElasticsearchConnectorOptions.CONNECTION_DEFAULT_HEADERS.key(),
+                "Authorization: Basic 123");
         return configuration;
     }
 

@@ -139,6 +139,7 @@ final class Elasticsearch7DynamicSink implements DynamicTableSink {
             config.getBulkFlushBackoffType().ifPresent(builder::setBulkFlushBackoffType);
             config.getBulkFlushBackoffRetries().ifPresent(builder::setBulkFlushBackoffRetries);
             config.getBulkFlushBackoffDelay().ifPresent(builder::setBulkFlushBackoffDelay);
+            config.getDefaultHeaders().ifPresent(builder::setConnectionDefaultHeaders);
 
             // we must overwrite the default factory which is defined with a lambda because of a bug
             // in shading lambda serialization shading see FLINK-18006

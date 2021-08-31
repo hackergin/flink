@@ -29,6 +29,7 @@ import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.util.InstantiationUtil;
 
 import java.time.Duration;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -36,6 +37,7 @@ import static org.apache.flink.streaming.connectors.elasticsearch.table.Elastics
 import static org.apache.flink.streaming.connectors.elasticsearch.table.ElasticsearchConnectorOptions.BULK_FLUSH_BACKOFF_MAX_RETRIES_OPTION;
 import static org.apache.flink.streaming.connectors.elasticsearch.table.ElasticsearchConnectorOptions.BULK_FLUSH_BACKOFF_TYPE_OPTION;
 import static org.apache.flink.streaming.connectors.elasticsearch.table.ElasticsearchConnectorOptions.BULK_FLUSH_INTERVAL_OPTION;
+import static org.apache.flink.streaming.connectors.elasticsearch.table.ElasticsearchConnectorOptions.CONNECTION_DEFAULT_HEADERS;
 import static org.apache.flink.streaming.connectors.elasticsearch.table.ElasticsearchConnectorOptions.FAILURE_HANDLER_OPTION;
 import static org.apache.flink.streaming.connectors.elasticsearch.table.ElasticsearchConnectorOptions.PASSWORD_OPTION;
 import static org.apache.flink.streaming.connectors.elasticsearch.table.ElasticsearchConnectorOptions.USERNAME_OPTION;
@@ -100,6 +102,10 @@ class ElasticsearchConfiguration {
         long interval = config.get(BULK_FLUSH_INTERVAL_OPTION).toMillis();
         // convert 0 to -1, because Elasticsearch client use -1 to disable this configuration.
         return interval == 0 ? -1 : interval;
+    }
+
+    public Optional<Map<String, String>> getDefaultHeaders() {
+        return config.getOptional(CONNECTION_DEFAULT_HEADERS);
     }
 
     public Optional<String> getUsername() {

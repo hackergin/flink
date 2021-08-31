@@ -18,12 +18,14 @@
 package org.apache.flink.streaming.connectors.elasticsearch6;
 
 import org.apache.flink.annotation.Internal;
+import org.apache.flink.configuration.ConfigurationUtils;
 import org.apache.flink.streaming.connectors.elasticsearch.ElasticsearchApiCallBridge;
 import org.apache.flink.streaming.connectors.elasticsearch.ElasticsearchSinkBase;
 import org.apache.flink.streaming.connectors.elasticsearch.RequestIndexer;
 import org.apache.flink.util.Preconditions;
 
 import org.apache.http.HttpHost;
+import org.apache.http.message.BasicHeader;
 import org.elasticsearch.action.bulk.BackoffPolicy;
 import org.elasticsearch.action.bulk.BulkItemResponse;
 import org.elasticsearch.action.bulk.BulkProcessor;
@@ -40,6 +42,8 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
+
+import static org.apache.flink.streaming.connectors.elasticsearch.ElasticsearchSinkBase.CONFIG_KEY_CONNECTION_DEFAULT_HEADERS;
 
 /** Implementation of {@link ElasticsearchApiCallBridge} for Elasticsearch 6 and later versions. */
 @Internal
@@ -66,6 +70,14 @@ public class Elasticsearch6ApiCallBridge
     public RestHighLevelClient createClient(Map<String, String> clientConfig) {
         RestClientBuilder builder =
                 RestClient.builder(httpHosts.toArray(new HttpHost[httpHosts.size()]));
+        if (clientConfig.containsKey(CONFIG_KEY_CONNECTION_DEFAULT_HEADERS)) {
+            String header = clientConfig.get(CONFIG_KEY_CONNECTION_DEFAULT_HEADERS);
+            Map<String, String> headerMap = ConfigurationUtils.convertValue(header, Map.class);
+            builder.setDefaultHeaders(
+                    headerMap.entrySet().stream()
+                            .map(h -> new BasicHeader(h.getKey(), h.getValue()))
+                            .toArray(BasicHeader[]::new));
+        }
         restClientFactory.configureRestClientBuilder(builder);
 
         RestHighLevelClient rhlClient = new RestHighLevelClient(builder);

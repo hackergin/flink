@@ -18,6 +18,7 @@
 package org.apache.flink.streaming.connectors.elasticsearch7;
 
 import org.apache.flink.annotation.PublicEvolving;
+import org.apache.flink.configuration.ConfigurationUtils;
 import org.apache.flink.streaming.connectors.elasticsearch.ActionRequestFailureHandler;
 import org.apache.flink.streaming.connectors.elasticsearch.ElasticsearchSinkBase;
 import org.apache.flink.streaming.connectors.elasticsearch.ElasticsearchSinkFunction;
@@ -200,6 +201,19 @@ public class ElasticsearchSink<T> extends ElasticsearchSinkBase<T, RestHighLevel
                     "Delay (in milliseconds) between each backoff attempt must be larger than or equal to 0.");
             this.bulkRequestsConfig.put(
                     CONFIG_KEY_BULK_FLUSH_BACKOFF_DELAY, String.valueOf(delayMillis));
+        }
+
+        /**
+         * Sets the client default headers.
+         *
+         * @param headers
+         */
+        public void setConnectionDefaultHeaders(Map<String, String> headers) {
+            Preconditions.checkArgument(
+                    headers != null, "The client default headers must not be null.");
+            this.bulkRequestsConfig.put(
+                    CONFIG_KEY_CONNECTION_DEFAULT_HEADERS,
+                    ConfigurationUtils.convertValue(headers, Map.class));
         }
 
         /**

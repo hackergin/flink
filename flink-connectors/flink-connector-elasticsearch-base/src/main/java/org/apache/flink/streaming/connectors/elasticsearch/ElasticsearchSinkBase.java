@@ -82,6 +82,7 @@ public abstract class ElasticsearchSinkBase<T, C extends AutoCloseable> extends 
     public static final String CONFIG_KEY_BULK_FLUSH_BACKOFF_TYPE = "bulk.flush.backoff.type";
     public static final String CONFIG_KEY_BULK_FLUSH_BACKOFF_RETRIES = "bulk.flush.backoff.retries";
     public static final String CONFIG_KEY_BULK_FLUSH_BACKOFF_DELAY = "bulk.flush.backoff.delay";
+    public static final String CONFIG_KEY_CONNECTION_DEFAULT_HEADERS = "connection.default.headers";
 
     /** Used to control whether the retry delay should increase exponentially or remain constant. */
     @PublicEvolving

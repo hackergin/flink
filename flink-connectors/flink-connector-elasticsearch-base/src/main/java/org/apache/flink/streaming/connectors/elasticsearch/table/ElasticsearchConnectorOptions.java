@@ -27,6 +27,7 @@ import org.apache.flink.streaming.connectors.elasticsearch.ElasticsearchSinkBase
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 
 import static org.apache.flink.configuration.description.TextElement.text;
 
@@ -144,6 +145,12 @@ public class ElasticsearchConnectorOptions {
                     .stringType()
                     .noDefaultValue()
                     .withDescription("Prefix string to be added to every REST communication.");
+
+    public static final ConfigOption<Map<String, String>> CONNECTION_DEFAULT_HEADERS =
+            ConfigOptions.key("connection.default-header")
+                    .mapType()
+                    .noDefaultValue()
+                    .withDescription("Default headers to be set in client builder");
 
     public static final ConfigOption<String> FORMAT_OPTION =
             ConfigOptions.key("format")
