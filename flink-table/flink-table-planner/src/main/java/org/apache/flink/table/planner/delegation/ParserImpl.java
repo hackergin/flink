@@ -101,10 +101,17 @@ public class ParserImpl implements Parser {
         // use parseSqlList here because we need to support statement end with ';' in sql client.
         SqlNodeList sqlNodeList = parser.parseSqlList(statement);
         List<SqlNode> parsed = sqlNodeList.getList();
-        Preconditions.checkArgument(parsed.size() == 1, "only single statement supported");
-        return Collections.singletonList(
-                SqlToOperationConverter.convert(planner, catalogManager, parsed.get(0))
-                        .orElseThrow(() -> new TableException("Unsupported query: " + statement)));
+//        Preconditions.checkArgument(parsed.size() == 1, "only single statement supported");
+//        return Collections.singletonList(
+//                SqlToOperationConverter.convert(planner, catalogManager, parsed.get(0))
+//                        .orElseThrow(() -> new TableException("Unsupported query: " + statement)));
+        List<Operation> operations = new ArrayList<>();
+
+        for (SqlNode sqlNode : parsed) {
+            operations.add(SqlToOperationConverter.convert(planner, catalogManager, sqlNode).orElseThrow(() -> new TableException("Unsupported query: " + statement)));
+        }
+
+        return operations;
     }
 
     @Override

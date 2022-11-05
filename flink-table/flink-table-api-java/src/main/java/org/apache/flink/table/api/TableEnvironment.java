@@ -1032,6 +1032,8 @@ public interface TableEnvironment {
      */
     TableResult executeSql(String statement);
 
+    List<TableResult> executeMultiSql(String statement);
+
     /**
      * Gets the current default catalog name of the current session.
      *

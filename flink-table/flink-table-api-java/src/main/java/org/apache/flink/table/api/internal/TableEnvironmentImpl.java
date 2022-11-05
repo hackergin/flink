@@ -762,6 +762,13 @@ public class TableEnvironmentImpl implements TableEnvironmentInternal {
     }
 
     @Override
+    public List<TableResult> executeMultiSql(String statement) {
+        List<Operation> operations = getParser().parse(statement);
+
+        return operations.stream().map(this::executeInternal).collect(Collectors.toList());
+    }
+
+    @Override
     public StatementSet createStatementSet() {
         return new StatementSetImpl(this);
     }

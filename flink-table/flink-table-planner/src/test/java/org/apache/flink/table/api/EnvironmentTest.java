@@ -30,6 +30,7 @@ import org.apache.flink.types.Row;
 import org.junit.Test;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.ExecutionException;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -87,5 +88,20 @@ public class EnvironmentTest {
                         TableConfigOptions.TABLE_CATALOG_NAME,
                         TableConfigOptions.TABLE_CATALOG_NAME.defaultValue());
         assertThat(stEnv.getCurrentCatalog()).isEqualTo("myCatalog");
+    }
+
+    @Test
+    public void testExecuteMultiLineSQL() throws ExecutionException {
+        Configuration conf = new Configuration();
+        conf.set(TableConfigOptions.TABLE_CATALOG_NAME, "myCatalog");
+        EnvironmentSettings settings =
+                EnvironmentSettings.newInstance().withConfiguration(conf).build();
+
+        TableEnvironment tEnv = TableEnvironment.create(settings);
+
+        List<TableResult> tableResultList = tEnv.executeMultiSql("create table testSource(a varchar, b varchar) with ('connector'='datagen'); select * from testSource");
+
+        tableResultList.get(0);
+
     }
 }
