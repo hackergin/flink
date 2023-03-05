@@ -67,6 +67,7 @@ public final class CatalogManager {
 
     // A map between names and catalogs.
     private final Map<String, Catalog> catalogs;
+    private final Optional<CatalogStore> catalogStore;
 
     // Those tables take precedence over corresponding permanent tables, thus they shadow
     // tables coming from catalogs.
@@ -89,6 +90,7 @@ public final class CatalogManager {
     private CatalogManager(
             String defaultCatalogName,
             Catalog defaultCatalog,
+            Optional<CatalogStore> catalogStore,
             DataTypeFactory typeFactory,
             ManagedTableListener managedTableListener) {
         checkArgument(
@@ -97,7 +99,6 @@ public final class CatalogManager {
         checkNotNull(defaultCatalog, "Default catalog cannot be null");
 
         catalogs = new LinkedHashMap<>();
-        catalogs.put(defaultCatalogName, defaultCatalog);
         currentCatalogName = defaultCatalogName;
         currentDatabaseName = defaultCatalog.getDefaultDatabase();
 
@@ -105,6 +106,7 @@ public final class CatalogManager {
         // right now the default catalog is always the built-in one
         builtInCatalogName = defaultCatalogName;
 
+        this.catalogStore = catalogStore;
         this.typeFactory = typeFactory;
         this.managedTableListener = managedTableListener;
     }
@@ -160,6 +162,7 @@ public final class CatalogManager {
             return new CatalogManager(
                     defaultCatalogName,
                     defaultCatalog,
+                    Optional.empty(),
                     dataTypeFactory != null
                             ? dataTypeFactory
                             : new DataTypeFactoryImpl(classLoader, config, executionConfig),
@@ -210,6 +213,18 @@ public final class CatalogManager {
 
         catalog.open();
         catalogs.put(catalogName, catalog);
+    }
+
+    public void registerCatalog(String catalogName, Map<String, String> properties) {
+        checkArgument(
+                !StringUtils.isNullOrWhitespaceOnly(catalogName),
+                "Catalog name cannot be null or empty.");
+        checkNotNull(properties, "properties cannot be null");
+
+
+        if (catalogStore.isPresent()) {
+            catalogStore.get().storeCatalog(catalogName, properties);
+        }
     }
 
     /**
