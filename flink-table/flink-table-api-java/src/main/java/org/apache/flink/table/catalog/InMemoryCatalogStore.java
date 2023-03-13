@@ -16,9 +16,7 @@ public class InMemoryCatalogStore implements CatalogStore {
     }
 
     @Override
-    public void storeCatalog(String catalogName, Map<String, String> properties) {
-
-    }
+    public void storeCatalog(String catalogName, Map<String, String> properties) {}
 
     @Override
     public Map<String, String> removeCatalog(String catalogName, boolean ignoreIfNotExists)

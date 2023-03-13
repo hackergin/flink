@@ -6,6 +6,9 @@ import java.util.HashSet;
 import java.util.Set;
 
 public class InMemoryCatalogStoreFactory implements CatalogStoreFactory {
+
+    public static final String IDENTIFIER = "in_memory";
+
     @Override
     public String factoryIdentifier() {
         return "in_memory";
@@ -23,6 +26,6 @@ public class InMemoryCatalogStoreFactory implements CatalogStoreFactory {
 
     @Override
     public CatalogStore createCatalogStore(Context context) {
-        return new FileCatalogStore();
+        return new InMemoryCatalogStore();
     }
 }

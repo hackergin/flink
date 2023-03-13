@@ -8,15 +8,23 @@ import java.util.Set;
 
 public class FileCatalogStoreFactory implements CatalogStoreFactory {
 
+    public static final String IDENTIFIER = "file";
+
     public static ConfigOption<String> PATH_OPTIONS =
-            ConfigOptions.key("path").stringType().noDefaultValue().withDescription("The path used to store catalog configuration.");
+            ConfigOptions.key("path")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription("The path used to store catalog configuration.");
 
     public static ConfigOption<String> FORMAT_OPTIONS =
-            ConfigOptions.key("format").stringType().defaultValue("xml").withDescription("Used to specify the format used for saving configurations.");
+            ConfigOptions.key("format")
+                    .stringType()
+                    .defaultValue("xml")
+                    .withDescription("Used to specify the format used for saving configurations.");
 
     @Override
     public String factoryIdentifier() {
-        return "file";
+        return IDENTIFIER;
     }
 
     @Override
@@ -34,6 +42,8 @@ public class FileCatalogStoreFactory implements CatalogStoreFactory {
 
     @Override
     public CatalogStore createCatalogStore(Context context) {
-        return new FileCatalogStore();
+        String path = context.getConfiguration().get(PATH_OPTIONS);
+        String format = context.getConfiguration().get(FORMAT_OPTIONS);
+        return new FileCatalogStore(path, format);
     }
 }
