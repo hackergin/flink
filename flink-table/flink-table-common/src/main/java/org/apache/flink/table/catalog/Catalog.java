@@ -41,7 +41,6 @@ import org.apache.flink.table.factories.FunctionDefinitionFactory;
 import org.apache.flink.table.factories.TableFactory;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -724,6 +723,7 @@ public interface Catalog {
             boolean ignoreIfNotExists)
             throws PartitionNotExistException, CatalogException;
 
-
-    default Map<String, String> getOptions() { throw new UnsupportedOperationException("");}
+    default Map<String, String> getOptions() {
+        throw new UnsupportedOperationException("");
+    }
 }

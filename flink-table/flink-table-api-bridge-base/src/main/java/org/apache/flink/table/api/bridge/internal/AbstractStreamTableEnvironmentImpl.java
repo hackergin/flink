@@ -24,6 +24,9 @@ import org.apache.flink.api.dag.Transformation;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.typeutils.TupleTypeInfo;
 import org.apache.flink.api.java.typeutils.TypeExtractor;
+import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.DelegatingConfiguration;
+import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
@@ -35,6 +38,8 @@ import org.apache.flink.table.api.Types;
 import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.api.internal.TableEnvironmentImpl;
 import org.apache.flink.table.catalog.CatalogManager;
+import org.apache.flink.table.catalog.CatalogStore;
+import org.apache.flink.table.catalog.CatalogStoreFactory;
 import org.apache.flink.table.catalog.ContextResolvedTable;
 import org.apache.flink.table.catalog.ExternalCatalogTable;
 import org.apache.flink.table.catalog.FunctionCatalog;
@@ -69,6 +74,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
+
+import static org.apache.flink.table.factories.FactoryUtil.SQL_CATALOG_STORE_TYPE;
 
 /** Abstract class to implement a {@code StreamTableEnvironment}. */
 @Internal
@@ -118,6 +125,27 @@ public abstract class AbstractStreamTableEnvironmentImpl extends TableEnvironmen
                             + executorFactory.getClass()
                             + "' doesn't implement StreamExecutorFactory.");
         }
+    }
+
+    public static Optional<CatalogStore> lookupCatalogStore(
+            ClassLoader classLoader, Configuration configuration) {
+        CatalogStore catalogStore = null;
+        final Optional<String> factoryIdentifier =
+                configuration.getOptional(SQL_CATALOG_STORE_TYPE);
+
+        if (factoryIdentifier.isPresent()) {
+            CatalogStoreFactory catalogStoreFactory =
+                    FactoryUtil.discoverFactory(
+                            classLoader, CatalogStoreFactory.class, factoryIdentifier.get());
+            String prefix =
+                    String.format("%s.%s", SQL_CATALOG_STORE_TYPE.key(), factoryIdentifier.get());
+            ReadableConfig readableConfig = new DelegatingConfiguration(configuration, prefix);
+            catalogStore =
+                    catalogStoreFactory.createCatalogStore(
+                            new CatalogStoreFactory.DefaultContext(readableConfig));
+        }
+
+        return Optional.ofNullable(catalogStore);
     }
 
     protected <T> Table fromStreamInternal(

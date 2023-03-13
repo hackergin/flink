@@ -117,6 +117,12 @@ public final class FactoryUtil {
                     .defaultValues("rest")
                     .withDescription("Specify the endpoints that are used.");
 
+    public static final ConfigOption<String> SQL_CATALOG_STORE_TYPE =
+            ConfigOptions.key("sql.catalog.store.type")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription("Specify which catalog-store to use.");
+
     /**
      * Suffix for keys of {@link ConfigOption} in case a connector requires multiple formats (e.g.
      * for both key and value).

@@ -90,9 +90,9 @@ public final class CatalogManager {
     private CatalogManager(
             String defaultCatalogName,
             Catalog defaultCatalog,
-            Optional<CatalogStore> catalogStore,
             DataTypeFactory typeFactory,
-            ManagedTableListener managedTableListener) {
+            ManagedTableListener managedTableListener,
+            Optional<CatalogStore> catalogStore) {
         checkArgument(
                 !StringUtils.isNullOrWhitespaceOnly(defaultCatalogName),
                 "Default catalog name cannot be null or empty");
@@ -130,6 +130,8 @@ public final class CatalogManager {
 
         private @Nullable DataTypeFactory dataTypeFactory;
 
+        private @Nullable CatalogStore catalogStore;
+
         public Builder classLoader(ClassLoader classLoader) {
             this.classLoader = classLoader;
             return this;
@@ -156,17 +158,22 @@ public final class CatalogManager {
             return this;
         }
 
+        public Builder catalogStore(CatalogStore catalogStore) {
+            this.catalogStore = catalogStore;
+            return this;
+        }
+
         public CatalogManager build() {
             checkNotNull(classLoader, "Class loader cannot be null");
             checkNotNull(config, "Config cannot be null");
             return new CatalogManager(
                     defaultCatalogName,
                     defaultCatalog,
-                    Optional.empty(),
                     dataTypeFactory != null
                             ? dataTypeFactory
                             : new DataTypeFactoryImpl(classLoader, config, executionConfig),
-                    new ManagedTableListener(classLoader, config));
+                    new ManagedTableListener(classLoader, config),
+                    Optional.ofNullable(catalogStore));
         }
     }
 
@@ -220,7 +227,6 @@ public final class CatalogManager {
                 !StringUtils.isNullOrWhitespaceOnly(catalogName),
                 "Catalog name cannot be null or empty.");
         checkNotNull(properties, "properties cannot be null");
-
 
         if (catalogStore.isPresent()) {
             catalogStore.get().storeCatalog(catalogName, properties);

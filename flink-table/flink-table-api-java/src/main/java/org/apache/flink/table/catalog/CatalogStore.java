@@ -6,15 +6,12 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-
-/**
- * Interfaces defining catalog-related behaviors
- */
-
+/** Interfaces defining catalog-related behaviors */
 public interface CatalogStore {
 
     /**
      * Store a catalog under the give name. The catalog name must be unique.
+     *
      * @param catalogName name under which to register the given catalog
      * @param properties catalog properties to store
      * @throws CatalogException if the registration of the catalog under the given name failed
@@ -29,17 +26,16 @@ public interface CatalogStore {
      *     catalog to be altered does not exist.
      * @throws CatalogException if the unregistration of the catalog under the given name failed
      */
-    Map<String, String> removeCatalog(String catalogName, boolean ignoreIfNotExists) throws CatalogException;
+    Map<String, String> removeCatalog(String catalogName, boolean ignoreIfNotExists)
+            throws CatalogException;
 
     /**
      * Gets a catalog by name.
      *
      * @param catalogName name of the catalog to retrieve
-     *
      * @return the requested catalog or empty if it does not exist
      */
     Optional<Map<String, String>> getCatalog(String catalogName);
-
 
     /**
      * Retrieves names of all registered catalogs.
