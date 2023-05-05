@@ -82,6 +82,10 @@ object FlinkBatchRuleSets {
     PushLimitIntoTableSourceScanRule.INSTANCE,
     PushLimitIntoLegacyTableSourceScanRule.INSTANCE)
 
+  private val SNAPSHOT_RULES: RuleSet = RuleSets.ofList(
+    // push down snapshot
+    PushSnapshotIntoTableSourceScanRule.INSTANCE)
+
   /** RuleSet to simplify predicate expressions in filters and joins */
   private val PREDICATE_SIMPLIFY_EXPRESSION_RULES: RuleSet = RuleSets.ofList(
     SimplifyFilterConditionRule.INSTANCE,
@@ -336,6 +340,7 @@ object FlinkBatchRuleSets {
     (
       LIMIT_RULES.asScala ++
         FILTER_RULES.asScala ++
+        SNAPSHOT_RULES.asScala ++
         PROJECT_RULES.asScala ++
         PRUNE_EMPTY_RULES.asScala ++
         LOGICAL_RULES.asScala ++

@@ -55,7 +55,7 @@ class FlinkLogicalSnapshot(
       case _: RexFieldAccess =>
       // pass
       case lit: RexLiteral =>
-        return litmus.fail(String.format(msg, s"a constant timestamp '${lit.toString}'"))
+//        return litmus.fail(String.format(msg, s"a constant timestamp '${lit.toString}'"))
       case _ =>
         return litmus.fail(String.format(msg, s"an expression call '${period.toString}'"))
     }
