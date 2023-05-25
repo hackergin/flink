@@ -40,15 +40,27 @@ public class DefaultCatalogTable implements CatalogTable {
     private final List<String> partitionKeys;
     private final Map<String, String> options;
 
+    private final @Nullable Long timestamp;
+
     protected DefaultCatalogTable(
             Schema schema,
             @Nullable String comment,
             List<String> partitionKeys,
             Map<String, String> options) {
+        this(schema, comment, partitionKeys, options, null);
+    }
+
+    protected DefaultCatalogTable(
+            Schema schema,
+            @Nullable String comment,
+            List<String> partitionKeys,
+            Map<String, String> options,
+            @Nullable Long timestamp) {
         this.schema = checkNotNull(schema, "Schema must not be null.");
         this.comment = comment;
         this.partitionKeys = checkNotNull(partitionKeys, "Partition keys must not be null.");
         this.options = checkNotNull(options, "Options must not be null.");
+        this.timestamp = timestamp;
 
         checkArgument(
                 options.entrySet().stream()
@@ -83,12 +95,12 @@ public class DefaultCatalogTable implements CatalogTable {
 
     @Override
     public CatalogBaseTable copy() {
-        return new DefaultCatalogTable(schema, comment, partitionKeys, options);
+        return new DefaultCatalogTable(schema, comment, partitionKeys, options, timestamp);
     }
 
     @Override
     public CatalogTable copy(Map<String, String> options) {
-        return new DefaultCatalogTable(schema, comment, partitionKeys, options);
+        return new DefaultCatalogTable(schema, comment, partitionKeys, options, timestamp);
     }
 
     @Override
@@ -140,5 +152,10 @@ public class DefaultCatalogTable implements CatalogTable {
                 + ", options="
                 + options
                 + '}';
+    }
+
+    @Override
+    public Optional<Long> getSnapshot() {
+        return Optional.ofNullable(timestamp);
     }
 }

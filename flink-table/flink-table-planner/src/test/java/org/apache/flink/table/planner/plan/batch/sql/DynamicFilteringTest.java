@@ -129,7 +129,7 @@ public class DynamicFilteringTest extends TableTestBase {
                                 + "  p1 VARCHAR\n"
                                 + ") PARTITIONED BY (p1)\n"
                                 + "  WITH (\n"
-                                + " 'connector' = 'values',\n"
+                                + " 'CONNECTOR' = 'values',\n"
                                 + " 'runtime-source' = 'SourceFunction',\n"
                                 + " 'partition-list' = 'p1:1;p1:2;p1:3',\n"
                                 + " 'dynamic-filtering-fields' = 'p1',\n"

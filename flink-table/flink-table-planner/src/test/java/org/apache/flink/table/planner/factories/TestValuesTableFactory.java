@@ -834,6 +834,7 @@ public final class TestValuesTableFactory
         private @Nullable int[] groupingSet;
         private List<AggregateExpression> aggregateExpressions;
         private List<String> acceptedPartitionFilterFields;
+        private long timestamp;
 
         private TestValuesScanTableSourceWithoutProjectionPushDown(
                 DataType producedDataType,

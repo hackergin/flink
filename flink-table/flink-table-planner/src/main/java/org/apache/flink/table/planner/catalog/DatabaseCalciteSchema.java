@@ -38,6 +38,7 @@ import org.apache.calcite.schema.Schemas;
 import org.apache.calcite.schema.Table;
 
 import java.util.HashSet;
+import java.util.Optional;
 import java.util.Set;
 
 import static java.lang.String.format;
@@ -53,6 +54,7 @@ class DatabaseCalciteSchema extends FlinkSchema {
     private final CatalogManager catalogManager;
     // Flag that tells if the current planner should work in a batch or streaming mode.
     private final boolean isStreamingMode;
+    private final Optional<Long> snapshot;
 
     public DatabaseCalciteSchema(
             String catalogName,
@@ -63,15 +65,22 @@ class DatabaseCalciteSchema extends FlinkSchema {
         this.catalogName = catalogName;
         this.catalogManager = catalog;
         this.isStreamingMode = isStreamingMode;
+        this.snapshot = Optional.empty();
     }
 
     @Override
     public Table getTable(String tableName) {
         final ObjectIdentifier identifier =
                 ObjectIdentifier.of(catalogName, databaseName, tableName);
-        return catalogManager
-                .getTable(identifier)
-                .map(
+        Optional<ContextResolvedTable> table;
+        if (getSchemaVersion().isPresent()) {
+            table =
+                    catalogManager.getTable(
+                            identifier, Long.valueOf(getSchemaVersion().get().toString()));
+        } else {
+            table = catalogManager.getTable(identifier);
+        }
+        return table.map(
                         lookupResult ->
                                 new CatalogSchemaTable(
                                         lookupResult,
@@ -141,5 +150,11 @@ class DatabaseCalciteSchema extends FlinkSchema {
     @Override
     public boolean isMutable() {
         return true;
+    }
+
+    @Override
+    public DatabaseCalciteSchema copy() {
+        return new DatabaseCalciteSchema(
+                catalogName, databaseName, catalogManager, isStreamingMode);
     }
 }

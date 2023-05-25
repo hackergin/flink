@@ -18,6 +18,7 @@ package org.apache.calcite.sql2rel;
 
 import org.apache.flink.table.planner.alias.ClearJoinHintWithInvalidPropagationShuttle;
 import org.apache.flink.table.planner.hint.FlinkHints;
+import org.apache.flink.table.planner.plan.FlinkCalciteCatalogReaderSnapshot;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -97,9 +98,11 @@ import org.apache.calcite.rex.RexWindowBounds;
 import org.apache.calcite.schema.ColumnStrategy;
 import org.apache.calcite.schema.ModifiableTable;
 import org.apache.calcite.schema.ModifiableView;
+import org.apache.calcite.schema.SchemaVersion;
 import org.apache.calcite.schema.Table;
 import org.apache.calcite.schema.TranslatableTable;
 import org.apache.calcite.schema.Wrapper;
+import org.apache.calcite.schema.impl.LongSchemaVersion;
 import org.apache.calcite.sql.JoinConditionType;
 import org.apache.calcite.sql.JoinType;
 import org.apache.calcite.sql.SqlAggFunction;
@@ -178,6 +181,7 @@ import org.apache.calcite.util.Litmus;
 import org.apache.calcite.util.NlsString;
 import org.apache.calcite.util.NumberUtil;
 import org.apache.calcite.util.Pair;
+import org.apache.calcite.util.TimestampString;
 import org.apache.calcite.util.Util;
 import org.apache.calcite.util.trace.CalciteTrace;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -2261,11 +2265,11 @@ public class SqlToRelConverter {
 
             case TABLE_REF:
                 call = (SqlCall) from;
-                convertIdentifier(bb, call.operand(0), null, call.operand(1));
+                convertIdentifier(bb, call.operand(0), null, call.operand(1), null);
                 return;
 
             case IDENTIFIER:
-                convertIdentifier(bb, (SqlIdentifier) from, null, null);
+                convertIdentifier(bb, (SqlIdentifier) from, null, null, null);
                 return;
 
             case EXTEND:
@@ -2276,7 +2280,7 @@ public class SqlToRelConverter {
                                 ? ((SqlCall) operand0).operand(0)
                                 : (SqlIdentifier) operand0;
                 SqlNodeList extendedColumns = (SqlNodeList) call.getOperandList().get(1);
-                convertIdentifier(bb, id, extendedColumns, null);
+                convertIdentifier(bb, id, extendedColumns, null, null);
                 return;
 
             case SNAPSHOT:
@@ -2673,7 +2677,8 @@ public class SqlToRelConverter {
             Blackboard bb,
             SqlIdentifier id,
             @Nullable SqlNodeList extendedColumns,
-            @Nullable SqlNodeList tableHints) {
+            @Nullable SqlNodeList tableHints,
+            @Nullable SchemaVersion schemaVersion) {
         final SqlValidatorNamespace fromNamespace = getNamespace(id).resolve();
         if (fromNamespace.getNode() != null) {
             convertFrom(bb, fromNamespace.getNode());
@@ -2683,7 +2688,15 @@ public class SqlToRelConverter {
         final boolean[] usedDataset = {false};
         RelOptTable table =
                 SqlValidatorUtil.getRelOptTable(
-                        fromNamespace, catalogReader, datasetName, usedDataset);
+                        fromNamespace,
+                        schemaVersion == null
+                                ? catalogReader
+                                : new FlinkCalciteCatalogReaderSnapshot(
+                                        catalogReader,
+                                        catalogReader.getTypeFactory(),
+                                        schemaVersion),
+                        datasetName,
+                        usedDataset);
         assert table != null : "getRelOptTable returned null for " + fromNamespace;
         if (extendedColumns != null && extendedColumns.size() > 0) {
             final SqlValidatorTable validatorTable = table.unwrapOrThrow(SqlValidatorTable.class);
@@ -2778,10 +2791,20 @@ public class SqlToRelConverter {
     private void convertTemporalTable(Blackboard bb, SqlCall call) {
         final SqlSnapshot snapshot = (SqlSnapshot) call;
         final RexNode period = bb.convertExpression(snapshot.getPeriod());
-
+        final SqlNode tableRef = snapshot.getTableRef();
         // convert inner query, could be a table name or a derived table
         SqlNode expr = snapshot.getTableRef();
-        convertFrom(bb, expr);
+        if (tableRef instanceof SqlBasicCall
+                && ((SqlBasicCall) tableRef).operand(0) instanceof SqlIdentifier
+                && period instanceof RexLiteral) {
+            long timestamp =
+                    ((RexLiteral) period).getValueAs(TimestampString.class).getMillisSinceEpoch();
+            SqlIdentifier identifier = (SqlIdentifier) ((SqlBasicCall) tableRef).operand(0);
+            SchemaVersion schemaVersion = new LongSchemaVersion(timestamp);
+            convertIdentifier(bb, identifier, null, null, schemaVersion);
+        } else {
+            convertFrom(bb, expr);
+        }
 
         final RelNode snapshotRel = relBuilder.push(bb.root()).snapshot(period).build();
 

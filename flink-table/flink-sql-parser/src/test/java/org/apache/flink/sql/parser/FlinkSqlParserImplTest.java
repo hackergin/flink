@@ -2415,6 +2415,12 @@ class FlinkSqlParserImplTest extends SqlParserTest {
                 .fails("WITH DRAIN could only be used after WITH SAVEPOINT.");
     }
 
+    @Test
+    void testTimeTravel() {
+        sql("select * from iceberg_table for system_time as of '2023-04-22 21:37:58'")
+                .ok("SELECT *\nFROM `ICEBERG_TABLE` FOR SYSTEM_TIME AS OF '2023-04-22 21:37:58'");
+    }
+
     public static BaseMatcher<SqlNode> validated(String validatedSql) {
         return new TypeSafeDiagnosingMatcher<SqlNode>() {
             @Override

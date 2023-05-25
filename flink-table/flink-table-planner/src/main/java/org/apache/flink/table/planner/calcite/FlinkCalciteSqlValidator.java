@@ -20,10 +20,19 @@ package org.apache.flink.table.planner.calcite;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.table.api.ValidationException;
+import org.apache.flink.table.planner.plan.FlinkCalciteCatalogReaderSnapshot;
+import org.apache.flink.table.planner.plan.utils.FlinkRexUtil;
 import org.apache.flink.table.types.logical.DecimalType;
 
+import org.apache.calcite.plan.RelOptCluster;
+import org.apache.calcite.plan.RelOptTable;
+import org.apache.calcite.prepare.CalciteCatalogReader;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
+import org.apache.calcite.rex.RexLiteral;
+import org.apache.calcite.rex.RexNode;
+import org.apache.calcite.schema.SchemaVersion;
+import org.apache.calcite.schema.impl.LongSchemaVersion;
 import org.apache.calcite.sql.JoinType;
 import org.apache.calcite.sql.SqlBasicCall;
 import org.apache.calcite.sql.SqlFunction;
@@ -32,15 +41,27 @@ import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.SqlLiteral;
 import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.SqlOperatorTable;
+import org.apache.calcite.sql.SqlSnapshot;
 import org.apache.calcite.sql.SqlUtil;
 import org.apache.calcite.sql.SqlWindowTableFunction;
+import org.apache.calcite.sql.validate.IdentifierNamespace;
+import org.apache.calcite.sql.validate.IdentifierNamespaceSnapshot;
+import org.apache.calcite.sql.validate.SelectScope;
 import org.apache.calcite.sql.validate.SqlValidator;
 import org.apache.calcite.sql.validate.SqlValidatorCatalogReader;
 import org.apache.calcite.sql.validate.SqlValidatorImpl;
+import org.apache.calcite.sql.validate.SqlValidatorNamespace;
 import org.apache.calcite.sql.validate.SqlValidatorScope;
+import org.apache.calcite.sql2rel.SqlToRelConverter;
+import org.apache.calcite.tools.FrameworkConfig;
 import org.apache.calcite.util.Static;
+import org.apache.calcite.util.TimestampString;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
 
@@ -54,12 +75,41 @@ public final class FlinkCalciteSqlValidator extends SqlValidatorImpl {
     private SqlNode sqlNodeForExpectedOutputType;
     private RelDataType expectedOutputType;
 
+    private RelOptCluster relOptCluster;
+
+    private RelOptTable.ToRelContext toRelContext;
+
+    private FrameworkConfig frameworkConfig;
+
     public FlinkCalciteSqlValidator(
             SqlOperatorTable opTab,
             SqlValidatorCatalogReader catalogReader,
             RelDataTypeFactory typeFactory,
             SqlValidator.Config config) {
         super(opTab, catalogReader, typeFactory, config);
+    }
+
+    public FlinkCalciteSqlValidator(
+            SqlOperatorTable opTab,
+            SqlValidatorCatalogReader catalogReader,
+            RelDataTypeFactory typeFactory,
+            SqlValidator.Config config,
+            RelOptTable.ToRelContext toRelcontext,
+            RelOptCluster relOptCluster,
+            FrameworkConfig frameworkConfig) {
+        super(opTab, catalogReader, typeFactory, config);
+        this.relOptCluster = relOptCluster;
+        this.toRelContext = toRelcontext;
+        this.frameworkConfig = frameworkConfig;
+    }
+
+    public FlinkCalciteSqlValidator createSnapshot(SchemaVersion schemaVersion) {
+        return new FlinkCalciteSqlValidator(
+                this.getOperatorTable(),
+                new FlinkCalciteCatalogReaderSnapshot(
+                        this.getCatalogReader(), this.getTypeFactory(), schemaVersion),
+                this.getTypeFactory(),
+                this.config());
     }
 
     public void setExpectedOutputType(SqlNode sqlNode, RelDataType expectedOutputType) {
@@ -124,5 +174,65 @@ public final class FlinkCalciteSqlValidator extends SqlValidatorImpl {
         // factory,
         // this makes it possible to ignore them in the validator and fall back to regular row types
         // see also SqlFunction#deriveType
+    }
+
+    protected void registerNamespace(
+            @Nullable SqlValidatorScope usingScope,
+            @Nullable String alias,
+            SqlValidatorNamespace ns,
+            boolean forceNullable) {
+        // apply snapshot to SqlValidatorNameSpace
+
+        if (ns instanceof IdentifierNamespace && ns.getEnclosingNode() instanceof SqlSnapshot) {
+            SqlSnapshot sqlSnapshot = (SqlSnapshot) ((SelectScope) usingScope).getNode().getFrom();
+            //            SqlNodeToRexConverterImpl
+            validateCall((SqlBasicCall) sqlSnapshot.getPeriod(), usingScope);
+            SqlNode sqlNode = sqlSnapshot.getPeriod();
+            SqlToRelConverter sqlToRelConverter = this.createSqlToRelConverter();
+            SqlNode sqlNode1 = this.validateParameterizedExpression(sqlNode, new HashMap<>());
+            RexNode rexNode = sqlToRelConverter.convertExpression(sqlNode1);
+            RexNode simplifiedRexNode =
+                    FlinkRexUtil.simplify(
+                            sqlToRelConverter.getRexBuilder(),
+                            rexNode,
+                            relOptCluster.getPlanner().getExecutor());
+            List<RexNode> reducedNodes = new ArrayList<>();
+            relOptCluster
+                    .getPlanner()
+                    .getExecutor()
+                    .reduce(
+                            relOptCluster.getRexBuilder(),
+                            Collections.singletonList(simplifiedRexNode),
+                            reducedNodes);
+            RexLiteral node = (RexLiteral) reducedNodes.get(0);
+            sqlSnapshot.setOperand(
+                    1,
+                    SqlLiteral.createTimestamp(
+                            node.getValueAs(TimestampString.class),
+                            node.getType().getPrecision(),
+                            sqlSnapshot.getPeriod().getParserPosition()));
+            long timeTravel = node.getValueAs(TimestampString.class).getMillisSinceEpoch();
+
+            SchemaVersion schemaVersion = new LongSchemaVersion(timeTravel);
+            IdentifierNamespace identifierNamespace = (IdentifierNamespace) ns;
+            IdentifierNamespace snapshotNameSpace =
+                    new IdentifierNamespaceSnapshot(
+                            identifierNamespace,
+                            schemaVersion,
+                            ((SelectScope) usingScope).getParent());
+            ns = snapshotNameSpace;
+        }
+
+        super.registerNamespace(usingScope, alias, ns, forceNullable);
+    }
+
+    private SqlToRelConverter createSqlToRelConverter() {
+        return new SqlToRelConverter(
+                toRelContext,
+                this,
+                this.getCatalogReader().unwrap(CalciteCatalogReader.class),
+                relOptCluster,
+                frameworkConfig.getConvertletTable(),
+                frameworkConfig.getSqlToRelConverterConfig());
     }
 }

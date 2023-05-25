@@ -373,6 +373,18 @@ public final class CatalogManager {
         }
     }
 
+    public Optional<ContextResolvedTable> getTable(
+            ObjectIdentifier objectIdentifier, long timestamp) {
+        CatalogBaseTable temporaryTable = temporaryTables.get(objectIdentifier);
+        if (temporaryTable != null) {
+            final ResolvedCatalogBaseTable<?> resolvedTable =
+                    resolveCatalogBaseTable(temporaryTable);
+            return Optional.of(ContextResolvedTable.temporary(objectIdentifier, resolvedTable));
+        } else {
+            return getPermanentTable(objectIdentifier, timestamp);
+        }
+    }
+
     /**
      * Like {@link #getTable(ObjectIdentifier)}, but throws an error when the table is not available
      * in any of the catalogs.
@@ -414,6 +426,24 @@ public final class CatalogManager {
         if (currentCatalog != null) {
             try {
                 final CatalogBaseTable table = currentCatalog.getTable(objectPath);
+                final ResolvedCatalogBaseTable<?> resolvedTable = resolveCatalogBaseTable(table);
+                return Optional.of(
+                        ContextResolvedTable.permanent(
+                                objectIdentifier, currentCatalog, resolvedTable));
+            } catch (TableNotExistException e) {
+                // Ignore.
+            }
+        }
+        return Optional.empty();
+    }
+
+    private Optional<ContextResolvedTable> getPermanentTable(
+            ObjectIdentifier objectIdentifier, long timestamp) {
+        Catalog currentCatalog = catalogs.get(objectIdentifier.getCatalogName());
+        ObjectPath objectPath = objectIdentifier.toObjectPath();
+        if (currentCatalog != null) {
+            try {
+                final CatalogBaseTable table = currentCatalog.getTable(objectPath, timestamp);
                 final ResolvedCatalogBaseTable<?> resolvedTable = resolveCatalogBaseTable(table);
                 return Optional.of(
                         ContextResolvedTable.permanent(
