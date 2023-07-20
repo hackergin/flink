@@ -95,6 +95,7 @@ class FunctionCatalogTest {
                                 configuration),
                         CatalogManagerMocks.preparedCatalogManager()
                                 .defaultCatalog(DEFAULT_CATALOG, catalog)
+                                .catalogStore(new GenericInMemoryCatalogStore())
                                 .build(),
                         moduleManager);
     }

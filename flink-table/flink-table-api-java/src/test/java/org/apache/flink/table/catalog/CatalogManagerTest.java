@@ -19,11 +19,13 @@
 package org.apache.flink.table.catalog;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.table.catalog.exceptions.CatalogException;
 import org.apache.flink.table.catalog.listener.AlterDatabaseEvent;
 import org.apache.flink.table.catalog.listener.CatalogModificationEvent;
 import org.apache.flink.table.catalog.listener.CatalogModificationListener;
 import org.apache.flink.table.catalog.listener.CreateDatabaseEvent;
 import org.apache.flink.table.catalog.listener.DropDatabaseEvent;
+import org.apache.flink.table.utils.CatalogManagerMocks;
 
 import org.junit.jupiter.api.Test;
 
@@ -33,6 +35,8 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Tests for {@link CatalogManager}. */
 class CatalogManagerTest {
@@ -103,6 +107,7 @@ class CatalogManagerTest {
                 .config(new Configuration())
                 .defaultCatalog("default", new GenericInMemoryCatalog("default"))
                 .catalogModificationListeners(Collections.singletonList(listener))
+                .catalogStore(new GenericInMemoryCatalogStore())
                 .build();
     }
 
@@ -133,5 +138,64 @@ class CatalogManagerTest {
                 throw new UnsupportedOperationException();
             }
         }
+    }
+
+    @Test
+    void testCatalogStore() {
+        CatalogStore catalogStore = new GenericInMemoryCatalogStore();
+
+        Configuration configuration = new Configuration();
+        configuration.setString("type", "generic_in_memory");
+
+        assertThatThrownBy(
+                        () ->
+                                catalogStore.storeCatalog(
+                                        "cat1", CatalogDescriptor.of("cat1", configuration)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("CatalogStore is not opened yet.");
+
+        CatalogManager catalogManager = CatalogManagerMocks.createCatalogManager(catalogStore);
+
+        catalogManager.createCatalog("cat1", CatalogDescriptor.of("cat1", configuration));
+        catalogManager.createCatalog("cat2", CatalogDescriptor.of("cat2", configuration));
+        catalogManager.createCatalog("cat3", CatalogDescriptor.of("cat3", configuration));
+
+        assertTrue(catalogManager.getCatalog("cat1").isPresent());
+        assertTrue(catalogManager.getCatalog("cat2").isPresent());
+        assertTrue(catalogManager.getCatalog("cat3").isPresent());
+
+        assertTrue(catalogManager.listCatalogs().contains("cat1"));
+        assertTrue(catalogManager.listCatalogs().contains("cat2"));
+        assertTrue(catalogManager.listCatalogs().contains("cat3"));
+
+        catalogManager.registerCatalog("cat4", new GenericInMemoryCatalog("cat4"));
+
+        assertThatThrownBy(
+                        () ->
+                                catalogManager.createCatalog(
+                                        "cat1", CatalogDescriptor.of("cat1", configuration)))
+                .isInstanceOf(CatalogException.class)
+                .hasMessageContaining("Catalog cat1 already exists in catalog store.");
+
+        assertThatThrownBy(
+                        () ->
+                                catalogManager.createCatalog(
+                                        "cat4", CatalogDescriptor.of("cat4", configuration)))
+                .isInstanceOf(CatalogException.class)
+                .hasMessageContaining("Catalog cat4 already exists in initialized catalogs.");
+
+        catalogManager.unregisterCatalog("cat1", false);
+        catalogManager.unregisterCatalog("cat2", false);
+        catalogManager.unregisterCatalog("cat3", false);
+
+        assertFalse(catalogManager.listCatalogs().contains("cat1"));
+        assertFalse(catalogManager.listCatalogs().contains("cat2"));
+        assertFalse(catalogManager.listCatalogs().contains("cat3"));
+
+        catalogManager.close();
+
+        assertThatThrownBy(() -> catalogManager.listCatalogs())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("CatalogStore is not opened yet.");
     }
 }

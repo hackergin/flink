@@ -27,6 +27,7 @@ import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.config.TableConfigOptions;
 import org.apache.flink.table.catalog.Catalog;
 import org.apache.flink.table.catalog.CatalogManager;
+import org.apache.flink.table.catalog.CatalogStore;
 import org.apache.flink.table.catalog.FunctionCatalog;
 import org.apache.flink.table.catalog.GenericInMemoryCatalog;
 import org.apache.flink.table.factories.TableFactoryUtil;
@@ -203,15 +204,12 @@ public class SessionContext {
     /** Close resources, e.g. catalogs. */
     public void close() {
         operationManager.close();
-        for (String name : sessionState.catalogManager.listCatalogs()) {
-            try {
-                sessionState.catalogManager.getCatalog(name).ifPresent(Catalog::close);
-            } catch (Throwable t) {
-                LOG.error(
-                        String.format(
-                                "Failed to close catalog %s for the session %s.", name, sessionId),
-                        t);
-            }
+        try {
+            sessionState.catalogManager.close();
+        } catch (Throwable t) {
+            LOG.error(
+                    String.format("Failed to close catalog manager for the session %s.", sessionId),
+                    t);
         }
         try {
             userClassloader.close();
@@ -322,6 +320,8 @@ public class SessionContext {
             Configuration configuration,
             URLClassLoader userClassLoader,
             SessionEnvironment environment) {
+        CatalogStore catalogStore =
+                TableFactoryUtil.findAndCreateCatalogStore(configuration, userClassLoader);
         CatalogManager.Builder builder =
                 CatalogManager.newBuilder()
                         // Currently, the classloader is only used by DataTypeFactory.
@@ -329,7 +329,8 @@ public class SessionContext {
                         .config(configuration)
                         .catalogModificationListeners(
                                 TableFactoryUtil.findCatalogModificationListenerList(
-                                        configuration, userClassLoader));
+                                        configuration, userClassLoader))
+                        .catalogStore(catalogStore);
 
         // init default catalog
         String defaultCatalogName;

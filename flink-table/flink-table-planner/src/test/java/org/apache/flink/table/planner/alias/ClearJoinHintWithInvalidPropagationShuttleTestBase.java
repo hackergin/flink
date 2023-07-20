@@ -24,6 +24,7 @@ import org.apache.flink.configuration.ExecutionOptions;
 import org.apache.flink.table.catalog.Catalog;
 import org.apache.flink.table.catalog.CatalogManager;
 import org.apache.flink.table.catalog.GenericInMemoryCatalog;
+import org.apache.flink.table.catalog.GenericInMemoryCatalogStore;
 import org.apache.flink.table.planner.calcite.FlinkRelBuilder;
 import org.apache.flink.table.planner.plan.utils.FlinkRelOptUtil;
 import org.apache.flink.table.planner.utils.PlannerMocks;
@@ -58,6 +59,7 @@ public abstract class ClearJoinHintWithInvalidPropagationShuttleTestBase extends
                                             isBatchMode()
                                                     ? RuntimeExecutionMode.BATCH.name()
                                                     : RuntimeExecutionMode.STREAMING.name())))
+                    .catalogStore(new GenericInMemoryCatalogStore())
                     .build();
 
     private final PlannerMocks plannerMocks =

@@ -41,4 +41,13 @@ public class CommonCatalogOptions {
      */
     public static final ConfigOption<String> CATALOG_TYPE =
             ConfigOptions.key("type").stringType().noDefaultValue();
+
+    public static final ConfigOption<String> TABLE_CATALOG_STORE_KIND =
+            ConfigOptions.key("table.catalog-store.kind")
+                    .stringType()
+                    .defaultValue("generic_in_memory")
+                    .withDescription("The kind of catalog store to be used.");
+
+    /** Used to filter the specific options for catalog store. */
+    public static final String TABLE_CATALOG_STORE_OPTION_PREFIX = "table.catalog-store.";
 }

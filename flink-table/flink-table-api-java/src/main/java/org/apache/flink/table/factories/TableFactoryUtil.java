@@ -18,13 +18,19 @@
 
 package org.apache.flink.table.factories;
 
+import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.DelegatingConfiguration;
 import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.table.api.TableException;
 import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.api.config.TableConfigOptions;
 import org.apache.flink.table.catalog.Catalog;
+import org.apache.flink.table.catalog.CatalogDescriptor;
+import org.apache.flink.table.catalog.CatalogStore;
 import org.apache.flink.table.catalog.CatalogTable;
+import org.apache.flink.table.catalog.CommonCatalogOptions;
 import org.apache.flink.table.catalog.ObjectIdentifier;
+import org.apache.flink.table.catalog.exceptions.CatalogException;
 import org.apache.flink.table.catalog.listener.CatalogModificationListener;
 import org.apache.flink.table.catalog.listener.CatalogModificationListenerFactory;
 import org.apache.flink.table.descriptors.ConnectorDescriptorValidator;
@@ -36,7 +42,9 @@ import javax.annotation.Nullable;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /** Utility for dealing with {@link TableFactory} using the {@link TableFactoryService}. */
@@ -195,5 +203,93 @@ public class TableFactoryUtil {
                                                     }
                                                 }))
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * Finds and creates a {@link CatalogStore} using the provided {@link Configuration} and user
+     * classloader.
+     *
+     * <p>The configuration format should be as follows:
+     *
+     * <pre>{@code
+     * table.catalog-store.kind: {identifier}
+     * table.catalog-store.{identifier}.{param1}: xxx
+     * table.catalog-store.{identifier}.{param2}: xxx
+     * }</pre>
+     */
+    public static CatalogStore findAndCreateCatalogStore(
+            Configuration configuration, ClassLoader classLoader) {
+        String identifier = configuration.getString(CommonCatalogOptions.TABLE_CATALOG_STORE_KIND);
+        String catalogStoreOptionPrefix =
+                CommonCatalogOptions.TABLE_CATALOG_STORE_OPTION_PREFIX + identifier + ".";
+        Map<String, String> options =
+                new DelegatingConfiguration(configuration, catalogStoreOptionPrefix).toMap();
+        CatalogStoreFactory catalogStoreFactory =
+                FactoryUtil.discoverFactory(classLoader, CatalogStoreFactory.class, identifier);
+        CatalogStoreFactory.Context context =
+                new FactoryUtil.DefaultCatalogStoreContext(options, configuration, classLoader);
+        catalogStoreFactory.open(context);
+        return CatalogStoreWithFactory.of(
+                catalogStoreFactory.createCatalogStore(context), catalogStoreFactory);
+    }
+
+    /**
+     * A wrapper class for {@link CatalogStore} that includes a {@link CatalogStoreFactory}.
+     *
+     * <p>This class can be used by users to close both the {@link CatalogStore} and {@link
+     * CatalogStoreFactory} instances.
+     */
+    private static class CatalogStoreWithFactory implements CatalogStore {
+
+        private CatalogStore catalogStore;
+
+        private CatalogStoreFactory factory;
+
+        public static CatalogStore of(CatalogStore catalogStore, CatalogStoreFactory factory) {
+            return new CatalogStoreWithFactory(catalogStore, factory);
+        }
+
+        private CatalogStoreWithFactory(CatalogStore catalogStore, CatalogStoreFactory factory) {
+            this.catalogStore = catalogStore;
+            this.factory = factory;
+        }
+
+        @Override
+        public void storeCatalog(String catalogName, CatalogDescriptor catalog)
+                throws CatalogException {
+            catalogStore.storeCatalog(catalogName, catalog);
+        }
+
+        @Override
+        public void removeCatalog(String catalogName, boolean ignoreIfNotExists)
+                throws CatalogException {
+            catalogStore.removeCatalog(catalogName, ignoreIfNotExists);
+        }
+
+        @Override
+        public Optional<CatalogDescriptor> getCatalog(String catalogName) throws CatalogException {
+            return catalogStore.getCatalog(catalogName);
+        }
+
+        @Override
+        public Set<String> listCatalogs() throws CatalogException {
+            return catalogStore.listCatalogs();
+        }
+
+        @Override
+        public boolean contains(String catalogName) throws CatalogException {
+            return catalogStore.contains(catalogName);
+        }
+
+        @Override
+        public void open() throws CatalogException {
+            catalogStore.open();
+        }
+
+        @Override
+        public void close() throws CatalogException {
+            catalogStore.close();
+            factory.close();
+        }
     }
 }

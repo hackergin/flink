@@ -45,9 +45,11 @@ import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.api.config.TableConfigOptions;
 import org.apache.flink.table.catalog.Catalog;
 import org.apache.flink.table.catalog.CatalogBaseTable;
+import org.apache.flink.table.catalog.CatalogDescriptor;
 import org.apache.flink.table.catalog.CatalogFunction;
 import org.apache.flink.table.catalog.CatalogFunctionImpl;
 import org.apache.flink.table.catalog.CatalogManager;
+import org.apache.flink.table.catalog.CatalogStore;
 import org.apache.flink.table.catalog.Column;
 import org.apache.flink.table.catalog.ConnectorCatalogTable;
 import org.apache.flink.table.catalog.ContextResolvedTable;
@@ -237,6 +239,9 @@ public class TableEnvironmentImpl implements TableEnvironmentInternal {
                         userClassLoader, ExecutorFactory.class, ExecutorFactory.DEFAULT_IDENTIFIER);
         final Executor executor = executorFactory.create(settings.getConfiguration());
 
+        final CatalogStore catalogStore =
+                TableFactoryUtil.findAndCreateCatalogStore(
+                        settings.getConfiguration(), userClassLoader);
         // use configuration to init table config
         final TableConfig tableConfig = TableConfig.getDefault();
         tableConfig.setRootConfiguration(executor.getConfiguration());
@@ -257,6 +262,7 @@ public class TableEnvironmentImpl implements TableEnvironmentInternal {
                         .catalogModificationListeners(
                                 TableFactoryUtil.findCatalogModificationListenerList(
                                         settings.getConfiguration(), userClassLoader))
+                        .catalogStore(catalogStore)
                         .build();
 
         final FunctionCatalog functionCatalog =
@@ -338,6 +344,11 @@ public class TableEnvironmentImpl implements TableEnvironmentInternal {
     @Override
     public void registerCatalog(String catalogName, Catalog catalog) {
         catalogManager.registerCatalog(catalogName, catalog);
+    }
+
+    @Override
+    public void createCatalog(String catalogName, CatalogDescriptor catalogDescriptor) {
+        catalogManager.createCatalog(catalogName, catalogDescriptor);
     }
 
     @Override

@@ -33,6 +33,7 @@ import org.apache.flink.table.api.bridge.internal.AbstractStreamTableEnvironment
 import org.apache.flink.table.api.bridge.java.StreamStatementSet;
 import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
 import org.apache.flink.table.catalog.CatalogManager;
+import org.apache.flink.table.catalog.CatalogStore;
 import org.apache.flink.table.catalog.DataTypeFactory;
 import org.apache.flink.table.catalog.FunctionCatalog;
 import org.apache.flink.table.catalog.GenericInMemoryCatalog;
@@ -113,6 +114,9 @@ public final class StreamTableEnvironmentImpl extends AbstractStreamTableEnviron
         final ResourceManager resourceManager =
                 new ResourceManager(settings.getConfiguration(), userClassLoader);
         final ModuleManager moduleManager = new ModuleManager();
+        final CatalogStore catalogStore =
+                TableFactoryUtil.findAndCreateCatalogStore(
+                        settings.getConfiguration(), userClassLoader);
 
         final CatalogManager catalogManager =
                 CatalogManager.newBuilder()
@@ -127,6 +131,7 @@ public final class StreamTableEnvironmentImpl extends AbstractStreamTableEnviron
                         .catalogModificationListeners(
                                 TableFactoryUtil.findCatalogModificationListenerList(
                                         settings.getConfiguration(), userClassLoader))
+                        .catalogStore(catalogStore)
                         .build();
 
         final FunctionCatalog functionCatalog =
