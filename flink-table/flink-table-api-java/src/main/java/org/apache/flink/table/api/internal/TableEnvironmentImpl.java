@@ -240,8 +240,10 @@ public class TableEnvironmentImpl implements TableEnvironmentInternal {
         final Executor executor = executorFactory.create(settings.getConfiguration());
 
         final CatalogStore catalogStore =
-                TableFactoryUtil.findAndCreateCatalogStore(
-                        settings.getConfiguration(), userClassLoader);
+                settings.getCatalogStore() != null
+                        ? settings.getCatalogStore()
+                        : TableFactoryUtil.findAndCreateCatalogStore(
+                                settings.getConfiguration(), userClassLoader);
         // use configuration to init table config
         final TableConfig tableConfig = TableConfig.getDefault();
         tableConfig.setRootConfiguration(executor.getConfiguration());

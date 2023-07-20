@@ -115,8 +115,10 @@ public final class StreamTableEnvironmentImpl extends AbstractStreamTableEnviron
                 new ResourceManager(settings.getConfiguration(), userClassLoader);
         final ModuleManager moduleManager = new ModuleManager();
         final CatalogStore catalogStore =
-                TableFactoryUtil.findAndCreateCatalogStore(
-                        settings.getConfiguration(), userClassLoader);
+                settings.getCatalogStore() != null
+                        ? settings.getCatalogStore()
+                        : TableFactoryUtil.findAndCreateCatalogStore(
+                                settings.getConfiguration(), userClassLoader);
 
         final CatalogManager catalogManager =
                 CatalogManager.newBuilder()
