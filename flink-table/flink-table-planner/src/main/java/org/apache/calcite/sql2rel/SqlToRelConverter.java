@@ -2948,6 +2948,7 @@ public class SqlToRelConverter {
 
         // convert inner query, could be a table name or a derived table
         SqlNode expr = snapshot.getTableRef();
+        // ----- FLINK MODIFICATION BEGIN -----
         SqlNode tableRef = snapshot.getTableRef();
         // since we have reduced the period of SqlSnapshot in the validate phase, we only need to
         // check whether the period is a RexLiteral.
@@ -2981,6 +2982,7 @@ public class SqlToRelConverter {
         } else {
             convertFrom(bb, expr);
         }
+        // ----- FLINK MODIFICATION END -----
 
         final RelNode snapshotRel = relBuilder.push(bb.root()).snapshot(period).build();
 
