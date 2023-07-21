@@ -24,6 +24,7 @@ import org.apache.flink.table.client.SqlClientException;
 import org.apache.flink.table.client.resource.ClientResourceManager;
 import org.apache.flink.table.client.util.ClientClassloaderUtil;
 import org.apache.flink.table.client.util.ClientWrapperClassLoader;
+import org.apache.flink.table.factories.TableFactoryUtil;
 import org.apache.flink.table.gateway.api.endpoint.EndpointVersion;
 import org.apache.flink.table.gateway.api.operation.OperationHandle;
 import org.apache.flink.table.gateway.api.session.SessionEnvironment;
@@ -150,7 +151,12 @@ public class SingleSessionManager implements SessionManager {
                     environment.getSessionEndpointVersion(),
                     configuration,
                     userClassLoader,
-                    initializeSessionState(environment, configuration, resourceManager),
+                    initializeSessionState(
+                            environment,
+                            configuration,
+                            resourceManager,
+                            TableFactoryUtil.findAndCreateCatalogStore(
+                                    configuration, userClassLoader)),
                     new OperationManager(operationExecutorService));
         }
 

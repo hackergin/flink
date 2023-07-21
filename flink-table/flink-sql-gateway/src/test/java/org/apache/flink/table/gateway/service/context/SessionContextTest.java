@@ -22,6 +22,7 @@ import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.ConfigOptions;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.api.config.TableConfigOptions;
+import org.apache.flink.table.catalog.GenericInMemoryCatalogStore;
 import org.apache.flink.table.catalog.listener.CatalogFactory1;
 import org.apache.flink.table.catalog.listener.CatalogFactory2;
 import org.apache.flink.table.catalog.listener.CatalogListener1;
@@ -166,7 +167,8 @@ class SessionContextTest {
                                                         CatalogFactory2.IDENTIFIER)))
                                 .setSessionEndpointVersion(MockedEndpointVersion.V1)
                                 .build(),
-                        EXECUTOR_SERVICE);
+                        EXECUTOR_SERVICE,
+                        new GenericInMemoryCatalogStore());
         assertThat(
                         context1.getSessionState().catalogManager.getCatalogModificationListeners()
                                 .stream()
@@ -188,7 +190,8 @@ class SessionContextTest {
                         SessionEnvironment.newBuilder()
                                 .setSessionEndpointVersion(MockedEndpointVersion.V1)
                                 .build(),
-                        EXECUTOR_SERVICE);
+                        EXECUTOR_SERVICE,
+                        new GenericInMemoryCatalogStore());
         assertThat(
                         context2.getSessionState().catalogManager.getCatalogModificationListeners()
                                 .stream()
@@ -213,6 +216,10 @@ class SessionContextTest {
                         .addSessionConfig(flinkConfig.toMap())
                         .build();
         return SessionContext.create(
-                defaultContext, SessionHandle.create(), environment, EXECUTOR_SERVICE);
+                defaultContext,
+                SessionHandle.create(),
+                environment,
+                EXECUTOR_SERVICE,
+                new GenericInMemoryCatalogStore());
     }
 }

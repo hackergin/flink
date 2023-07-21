@@ -230,7 +230,7 @@ public class TableFactoryUtil {
                 new FactoryUtil.DefaultCatalogStoreContext(options, configuration, classLoader);
         catalogStoreFactory.open(context);
         return CatalogStoreWithFactory.of(
-                catalogStoreFactory.createCatalogStore(context), catalogStoreFactory);
+                catalogStoreFactory.createCatalogStore(), catalogStoreFactory);
     }
 
     /**
@@ -291,5 +291,32 @@ public class TableFactoryUtil {
             catalogStore.close();
             factory.close();
         }
+    }
+
+    /**
+     * Finds and creates a {@link CatalogStoreFactory} using the provided {@link Configuration} and
+     * user classloader.
+     *
+     * <p>The configuration format should be as follows:
+     *
+     * <pre>{@code
+     * table.catalog-store.kind: {identifier}
+     * table.catalog-store.{identifier}.{param1}: xxx
+     * table.catalog-store.{identifier}.{param2}: xxx
+     * }</pre>
+     */
+    public static CatalogStoreFactory findAndCreateCatalogStoreFactory(
+            Configuration configuration, ClassLoader classLoader) {
+        String identifier = configuration.getString(CommonCatalogOptions.TABLE_CATALOG_STORE_KIND);
+        String catalogStoreOptionPrefix =
+                CommonCatalogOptions.TABLE_CATALOG_STORE_OPTION_PREFIX + identifier;
+        Map<String, String> options =
+                new DelegatingConfiguration(configuration, catalogStoreOptionPrefix).toMap();
+        CatalogStoreFactory catalogStoreFactory =
+                FactoryUtil.discoverFactory(classLoader, CatalogStoreFactory.class, identifier);
+        CatalogStoreFactory.Context context =
+                new FactoryUtil.DefaultCatalogStoreContext(options, configuration, classLoader);
+        catalogStoreFactory.open(context);
+        return catalogStoreFactory;
     }
 }

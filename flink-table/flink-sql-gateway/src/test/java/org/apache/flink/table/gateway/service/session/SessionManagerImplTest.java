@@ -20,6 +20,11 @@ package org.apache.flink.table.gateway.service.session;
 
 import org.apache.flink.api.common.time.Deadline;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.table.catalog.CatalogDescriptor;
+import org.apache.flink.table.catalog.CatalogStore;
+import org.apache.flink.table.catalog.CommonCatalogOptions;
+import org.apache.flink.table.catalog.exceptions.CatalogException;
+import org.apache.flink.table.factories.CatalogStoreFactory;
 import org.apache.flink.table.gateway.api.config.SqlGatewayServiceConfigOptions;
 import org.apache.flink.table.gateway.api.session.SessionEnvironment;
 import org.apache.flink.table.gateway.api.session.SessionHandle;
@@ -34,9 +39,11 @@ import org.junit.jupiter.api.Test;
 import java.time.Duration;
 import java.util.Collections;
 
+import static org.assertj.core.api.AssertionsForClassTypes.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Test for {@link SessionManagerImpl}. */
 class SessionManagerImplTest {
@@ -101,5 +108,59 @@ class SessionManagerImplTest {
                 SqlGatewayException.class,
                 () -> sessionManager.openSession(environment),
                 "Failed to create session, the count of active sessions exceeds the max count: 3");
+    }
+
+    /**
+     * This test verifies that {@link SessionManagerImpl} can use a single {@link
+     * CatalogStoreFactory} to create different {@link CatalogStore} instances for each session.
+     */
+    @Test
+    void testCreateCatalogStoreForEachSession() {
+        Configuration conf = new Configuration();
+        // Set a long idle timeout value in case the session is auto-closed.
+        conf.set(
+                SqlGatewayServiceConfigOptions.SQL_GATEWAY_SESSION_IDLE_TIMEOUT,
+                Duration.ofSeconds(60 * 1000));
+        conf.set(
+                SqlGatewayServiceConfigOptions.SQL_GATEWAY_SESSION_CHECK_INTERVAL,
+                Duration.ofMillis(100));
+        conf.set(CommonCatalogOptions.TABLE_CATALOG_STORE_KIND, "test-catalog-store");
+        conf.set(SqlGatewayServiceConfigOptions.SQL_GATEWAY_SESSION_MAX_NUM, 3);
+        sessionManager = new SessionManagerImpl(new DefaultContext(conf, Collections.emptyList()));
+        sessionManager.start();
+
+        SessionEnvironment environment =
+                SessionEnvironment.newBuilder()
+                        .setSessionEndpointVersion(MockedEndpointVersion.V1)
+                        .build();
+        // Open two sessions that will share all created catalogs.
+        Session session1 = sessionManager.openSession(environment);
+        Session session2 = sessionManager.openSession(environment);
+
+        Configuration configuration = new Configuration();
+        configuration.setString("type", "generic_in_memory");
+        session1.createExecutor()
+                .getTableEnvironment()
+                .getCatalogManager()
+                .createCatalog("cat1", CatalogDescriptor.of("cat1", configuration));
+        session2.createExecutor()
+                .getTableEnvironment()
+                .getCatalogManager()
+                .createCatalog("cat2", CatalogDescriptor.of("cat2", configuration));
+
+        assertTrue(session1.createExecutor().listCatalogs().contains("cat1"));
+        assertTrue(session1.createExecutor().listCatalogs().contains("cat2"));
+
+        assertThatThrownBy(
+                        () ->
+                                session1.createExecutor()
+                                        .getTableEnvironment()
+                                        .createCatalog(
+                                                "cat2",
+                                                CatalogDescriptor.of("cat2", configuration)))
+                .isInstanceOf(CatalogException.class)
+                .hasMessageContaining("Catalog cat2 already exists in catalog store.");
+
+        sessionManager.stop();
     }
 }

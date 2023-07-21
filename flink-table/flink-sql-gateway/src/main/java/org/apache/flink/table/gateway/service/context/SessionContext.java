@@ -237,7 +237,8 @@ public class SessionContext {
             DefaultContext defaultContext,
             SessionHandle sessionId,
             SessionEnvironment environment,
-            ExecutorService operationExecutorService) {
+            ExecutorService operationExecutorService,
+            CatalogStore catalogStore) {
         Configuration configuration =
                 initializeConfiguration(defaultContext, environment, sessionId);
         final MutableURLClassLoader userClassLoader =
@@ -252,7 +253,7 @@ public class SessionContext {
                 environment.getSessionEndpointVersion(),
                 configuration,
                 userClassLoader,
-                initializeSessionState(environment, configuration, resourceManager),
+                initializeSessionState(environment, configuration, resourceManager, catalogStore),
                 new OperationManager(operationExecutorService));
     }
 
@@ -280,14 +281,18 @@ public class SessionContext {
     protected static SessionState initializeSessionState(
             SessionEnvironment environment,
             Configuration configuration,
-            ResourceManager resourceManager) {
+            ResourceManager resourceManager,
+            CatalogStore catalogStore) {
         final ModuleManager moduleManager =
                 buildModuleManager(
                         environment, configuration, resourceManager.getUserClassLoader());
 
         final CatalogManager catalogManager =
                 buildCatalogManager(
-                        configuration, resourceManager.getUserClassLoader(), environment);
+                        configuration,
+                        resourceManager.getUserClassLoader(),
+                        environment,
+                        catalogStore);
 
         final FunctionCatalog functionCatalog =
                 new FunctionCatalog(configuration, resourceManager, catalogManager, moduleManager);
@@ -319,9 +324,8 @@ public class SessionContext {
     private static CatalogManager buildCatalogManager(
             Configuration configuration,
             URLClassLoader userClassLoader,
-            SessionEnvironment environment) {
-        CatalogStore catalogStore =
-                TableFactoryUtil.findAndCreateCatalogStore(configuration, userClassLoader);
+            SessionEnvironment environment,
+            CatalogStore catalogStore) {
         CatalogManager.Builder builder =
                 CatalogManager.newBuilder()
                         // Currently, the classloader is only used by DataTypeFactory.
