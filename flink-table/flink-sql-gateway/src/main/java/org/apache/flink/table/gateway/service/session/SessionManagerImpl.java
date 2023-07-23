@@ -73,8 +73,6 @@ public class SessionManagerImpl implements SessionManager {
     private @Nullable ScheduledExecutorService cleanupService;
     private @Nullable ScheduledFuture<?> timeoutCheckerFuture;
 
-    private CatalogStoreFactory catalogStoreFactory;
-
     public SessionManagerImpl(DefaultContext defaultContext) {
         this.defaultContext = defaultContext;
         ReadableConfig conf = defaultContext.getFlinkConfig();
@@ -82,7 +80,6 @@ public class SessionManagerImpl implements SessionManager {
         this.checkInterval = conf.get(SQL_GATEWAY_SESSION_CHECK_INTERVAL).toMillis();
         this.maxSessionCount = conf.get(SQL_GATEWAY_SESSION_MAX_NUM);
         this.sessions = new ConcurrentHashMap<>();
-        this.catalogStoreFactory = initCatalogStoreFactory(defaultContext);
     }
 
     @Override
@@ -163,8 +160,7 @@ public class SessionManagerImpl implements SessionManager {
                         defaultContext,
                         sessionId,
                         environment,
-                        operationExecutorService,
-                        catalogStoreFactory.createCatalogStore());
+                        operationExecutorService);
 
         session = new Session(sessionContext);
         sessions.put(sessionId, session);
@@ -177,14 +173,23 @@ public class SessionManagerImpl implements SessionManager {
         return session;
     }
 
-    private CatalogStoreFactory initCatalogStoreFactory(DefaultContext context) {
-        final MutableURLClassLoader userClassLoader =
-                FlinkUserCodeClassLoaders.create(
-                        defaultContext.getDependencies().toArray(new URL[0]),
-                        SessionContext.class.getClassLoader(),
-                        context.getFlinkConfig());
-        return TableFactoryUtil.findAndCreateCatalogStoreFactory(
-                context.getFlinkConfig(), userClassLoader);
+    private static CatalogStoreFactory initCatalogStoreFactory(
+            DefaultContext context, ClassLoader userClassLoader) {
+        CatalogStoreFactory catalogStoreFactory =
+                TableFactoryUtil.findAndCreateCatalogStoreFactory(
+                        context.getFlinkConfig(), userClassLoader);
+        CatalogStoreFactory.Context catalogStoreFactoryContext =
+                TableFactoryUtil.buildCatalogStoreFactoryContext(
+                        context.getFlinkConfig(), userClassLoader);
+        catalogStoreFactory.open(catalogStoreFactoryContext);
+        return catalogStoreFactory;
+    }
+
+    private static MutableURLClassLoader createStateStoreClassloader(DefaultContext context) {
+        return FlinkUserCodeClassLoaders.create(
+                context.getDependencies().toArray(new URL[0]),
+                SessionContext.class.getClassLoader(),
+                context.getFlinkConfig());
     }
 
     public void closeSession(SessionHandle sessionHandle) throws SqlGatewayException {

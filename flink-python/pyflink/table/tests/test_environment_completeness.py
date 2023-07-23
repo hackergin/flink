@@ -44,7 +44,7 @@ class EnvironmentAPICompletenessTests(PythonAPICompletenessTestCase, PyFlinkTest
             'compilePlanSql',
             'executePlan',
             'explainPlan',
-            # Sess FLINK-32647
+            # See FLINK-32647
             'createCatalog'}
 
     @classmethod

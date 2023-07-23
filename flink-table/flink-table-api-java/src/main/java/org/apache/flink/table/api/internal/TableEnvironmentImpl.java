@@ -49,7 +49,7 @@ import org.apache.flink.table.catalog.CatalogDescriptor;
 import org.apache.flink.table.catalog.CatalogFunction;
 import org.apache.flink.table.catalog.CatalogFunctionImpl;
 import org.apache.flink.table.catalog.CatalogManager;
-import org.apache.flink.table.catalog.CatalogStore;
+import org.apache.flink.table.catalog.CatalogStoreHolder;
 import org.apache.flink.table.catalog.Column;
 import org.apache.flink.table.catalog.ConnectorCatalogTable;
 import org.apache.flink.table.catalog.ContextResolvedTable;
@@ -73,6 +73,7 @@ import org.apache.flink.table.delegation.Planner;
 import org.apache.flink.table.execution.StagingSinkJobStatusHook;
 import org.apache.flink.table.expressions.ApiExpressionUtils;
 import org.apache.flink.table.expressions.Expression;
+import org.apache.flink.table.factories.CatalogStoreFactory;
 import org.apache.flink.table.factories.FactoryUtil;
 import org.apache.flink.table.factories.PlannerFactoryUtil;
 import org.apache.flink.table.factories.TableFactoryUtil;
@@ -239,11 +240,14 @@ public class TableEnvironmentImpl implements TableEnvironmentInternal {
                         userClassLoader, ExecutorFactory.class, ExecutorFactory.DEFAULT_IDENTIFIER);
         final Executor executor = executorFactory.create(settings.getConfiguration());
 
-        final CatalogStore catalogStore =
-                settings.getCatalogStore() != null
-                        ? settings.getCatalogStore()
-                        : TableFactoryUtil.findAndCreateCatalogStore(
-                                settings.getConfiguration(), userClassLoader);
+        final CatalogStoreFactory catalogStoreFactory =
+                TableFactoryUtil.findAndCreateCatalogStoreFactory(
+                        settings.getConfiguration(), userClassLoader);
+        final CatalogStoreFactory.Context context =
+                TableFactoryUtil.buildCatalogStoreFactoryContext(
+                        settings.getConfiguration(), userClassLoader);
+        catalogStoreFactory.open(context);
+
         // use configuration to init table config
         final TableConfig tableConfig = TableConfig.getDefault();
         tableConfig.setRootConfiguration(executor.getConfiguration());
@@ -264,8 +268,14 @@ public class TableEnvironmentImpl implements TableEnvironmentInternal {
                         .catalogModificationListeners(
                                 TableFactoryUtil.findCatalogModificationListenerList(
                                         settings.getConfiguration(), userClassLoader))
-                        .catalogStore(catalogStore)
+                        .catalogStoreHolder(
+                                CatalogStoreHolder.newBuilder()
+                                        .catalogStore(catalogStoreFactory.createCatalogStore())
+                                        .factory(catalogStoreFactory)
+                                        .config(tableConfig)
+                                        .build())
                         .build();
+        catalogManager.open();
 
         final FunctionCatalog functionCatalog =
                 new FunctionCatalog(tableConfig, resourceManager, catalogManager, moduleManager);

@@ -24,6 +24,7 @@ import org.apache.flink.table.api.config.TableConfigOptions;
 import org.apache.flink.table.catalog.Catalog;
 import org.apache.flink.table.catalog.CatalogManager;
 import org.apache.flink.table.catalog.CatalogStore;
+import org.apache.flink.table.catalog.CatalogStoreHolder;
 import org.apache.flink.table.catalog.GenericInMemoryCatalog;
 import org.apache.flink.table.catalog.GenericInMemoryCatalogStore;
 
@@ -51,13 +52,13 @@ public final class CatalogManagerMocks {
     }
 
     public static CatalogManager createCatalogManager(
-            @Nullable Catalog catalog, @Nullable CatalogStore catalogStore) {
+            @Nullable Catalog catalog, @Nullable CatalogStoreHolder catalogStoreHolder) {
         final CatalogManager.Builder builder = preparedCatalogManager();
         if (catalog != null) {
             builder.defaultCatalog(DEFAULT_CATALOG, catalog);
         }
-        if (catalogStore != null) {
-            builder.catalogStore(catalogStore);
+        if (catalogStoreHolder != null) {
+            builder.catalogStoreHolder(catalogStoreHolder);
         }
         final CatalogManager catalogManager = builder.build();
         catalogManager.initSchemaResolver(true, ExpressionResolverMocks.dummyResolver());
@@ -69,7 +70,12 @@ public final class CatalogManagerMocks {
                 .classLoader(CatalogManagerMocks.class.getClassLoader())
                 .config(new Configuration())
                 .defaultCatalog(DEFAULT_CATALOG, createEmptyCatalog())
-                .catalogStore(new GenericInMemoryCatalogStore())
+                .catalogStoreHolder(
+                        CatalogStoreHolder.newBuilder()
+                                .classloader(CatalogManagerMocks.class.getClassLoader())
+                                .config(new Configuration())
+                                .catalogStore(new GenericInMemoryCatalogStore())
+                                .build())
                 .executionConfig(new ExecutionConfig());
     }
 

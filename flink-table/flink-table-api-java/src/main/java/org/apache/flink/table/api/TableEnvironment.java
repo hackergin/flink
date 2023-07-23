@@ -389,8 +389,9 @@ public interface TableEnvironment {
      *
      * @param catalogName The name under which the catalog will be registered.
      * @param catalog The catalog to register.
-     * @deprecated Use {@link #createCatalog(String, CatalogDescriptor)} instead to create a catalog
-     *     using {@link CatalogDescriptor} and store it in the {@link CatalogStore}.
+     * @deprecated Use {@link #createCatalog(String, CatalogDescriptor)} instead. The new method
+     *     uses a {@link CatalogDescriptor} to initialize the catalog instance and store the {@link
+     *     CatalogDescriptor} to the {@link CatalogStore}.
      */
     @Deprecated
     void registerCatalog(String catalogName, Catalog catalog);
@@ -398,7 +399,7 @@ public interface TableEnvironment {
     /**
      * Creates a {@link Catalog} using the provided {@link CatalogDescriptor}. All table registered
      * in the {@link Catalog} can be accessed. The {@link CatalogDescriptor} will be persisted into
-     * the {@link CatalogStore}
+     * the {@link CatalogStore}.
      *
      * @param catalogName The name under which the catalog will be created
      * @param catalogDescriptor The catalog descriptor for creating catalog

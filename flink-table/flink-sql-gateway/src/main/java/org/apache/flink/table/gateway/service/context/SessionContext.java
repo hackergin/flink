@@ -27,9 +27,10 @@ import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.config.TableConfigOptions;
 import org.apache.flink.table.catalog.Catalog;
 import org.apache.flink.table.catalog.CatalogManager;
-import org.apache.flink.table.catalog.CatalogStore;
+import org.apache.flink.table.catalog.CatalogStoreHolder;
 import org.apache.flink.table.catalog.FunctionCatalog;
 import org.apache.flink.table.catalog.GenericInMemoryCatalog;
+import org.apache.flink.table.factories.CatalogStoreFactory;
 import org.apache.flink.table.factories.TableFactoryUtil;
 import org.apache.flink.table.gateway.api.endpoint.EndpointVersion;
 import org.apache.flink.table.gateway.api.session.SessionEnvironment;
@@ -237,8 +238,7 @@ public class SessionContext {
             DefaultContext defaultContext,
             SessionHandle sessionId,
             SessionEnvironment environment,
-            ExecutorService operationExecutorService,
-            CatalogStore catalogStore) {
+            ExecutorService operationExecutorService) {
         Configuration configuration =
                 initializeConfiguration(defaultContext, environment, sessionId);
         final MutableURLClassLoader userClassLoader =
@@ -253,7 +253,7 @@ public class SessionContext {
                 environment.getSessionEndpointVersion(),
                 configuration,
                 userClassLoader,
-                initializeSessionState(environment, configuration, resourceManager, catalogStore),
+                initializeSessionState(environment, configuration, resourceManager),
                 new OperationManager(operationExecutorService));
     }
 
@@ -281,18 +281,14 @@ public class SessionContext {
     protected static SessionState initializeSessionState(
             SessionEnvironment environment,
             Configuration configuration,
-            ResourceManager resourceManager,
-            CatalogStore catalogStore) {
+            ResourceManager resourceManager) {
         final ModuleManager moduleManager =
                 buildModuleManager(
                         environment, configuration, resourceManager.getUserClassLoader());
 
         final CatalogManager catalogManager =
                 buildCatalogManager(
-                        configuration,
-                        resourceManager.getUserClassLoader(),
-                        environment,
-                        catalogStore);
+                        configuration, resourceManager.getUserClassLoader(), environment);
 
         final FunctionCatalog functionCatalog =
                 new FunctionCatalog(configuration, resourceManager, catalogManager, moduleManager);
@@ -324,8 +320,13 @@ public class SessionContext {
     private static CatalogManager buildCatalogManager(
             Configuration configuration,
             URLClassLoader userClassLoader,
-            SessionEnvironment environment,
-            CatalogStore catalogStore) {
+            SessionEnvironment environment) {
+        CatalogStoreFactory catalogStoreFactory =
+                TableFactoryUtil.findAndCreateCatalogStoreFactory(configuration, userClassLoader);
+        CatalogStoreFactory.Context catalogStoreFactoryContext =
+                TableFactoryUtil.buildCatalogStoreFactoryContext(configuration, userClassLoader);
+        catalogStoreFactory.open(catalogStoreFactoryContext);
+
         CatalogManager.Builder builder =
                 CatalogManager.newBuilder()
                         // Currently, the classloader is only used by DataTypeFactory.
@@ -334,7 +335,13 @@ public class SessionContext {
                         .catalogModificationListeners(
                                 TableFactoryUtil.findCatalogModificationListenerList(
                                         configuration, userClassLoader))
-                        .catalogStore(catalogStore);
+                        .catalogStoreHolder(
+                                CatalogStoreHolder.newBuilder()
+                                        .classloader(userClassLoader)
+                                        .config(configuration)
+                                        .catalogStore(catalogStoreFactory.createCatalogStore())
+                                        .factory(catalogStoreFactory)
+                                        .build());
 
         // init default catalog
         String defaultCatalogName;
@@ -366,6 +373,7 @@ public class SessionContext {
 
         CatalogManager catalogManager =
                 builder.defaultCatalog(defaultCatalogName, defaultCatalog).build();
+        catalogManager.open();
 
         // filter the default catalog out to avoid repeated registration
         environment

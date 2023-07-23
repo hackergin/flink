@@ -51,6 +51,7 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -71,7 +72,7 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
  * encapsulates all available catalogs and stores temporary objects.
  */
 @Internal
-public final class CatalogManager implements CatalogRegistry {
+public final class CatalogManager implements CatalogRegistry, AutoCloseable {
     private static final Logger LOG = LoggerFactory.getLogger(CatalogManager.class);
 
     // A map between names and catalogs.
@@ -97,11 +98,7 @@ public final class CatalogManager implements CatalogRegistry {
 
     private final List<CatalogModificationListener> catalogModificationListeners;
 
-    private final CatalogStore catalogStore;
-
-    private final ClassLoader classLoader;
-
-    private final ReadableConfig config;
+    private final CatalogStoreHolder catalogStoreHolder;
 
     private CatalogManager(
             String defaultCatalogName,
@@ -109,9 +106,7 @@ public final class CatalogManager implements CatalogRegistry {
             DataTypeFactory typeFactory,
             ManagedTableListener managedTableListener,
             List<CatalogModificationListener> catalogModificationListeners,
-            CatalogStore catalogStore,
-            ClassLoader classLoader,
-            ReadableConfig config) {
+            CatalogStoreHolder catalogStoreHolder) {
         checkArgument(
                 !StringUtils.isNullOrWhitespaceOnly(defaultCatalogName),
                 "Default catalog name cannot be null or empty");
@@ -130,9 +125,7 @@ public final class CatalogManager implements CatalogRegistry {
         this.managedTableListener = managedTableListener;
         this.catalogModificationListeners = catalogModificationListeners;
 
-        this.catalogStore = catalogStore;
-        this.classLoader = classLoader;
-        this.config = config;
+        this.catalogStoreHolder = catalogStoreHolder;
     }
 
     @VisibleForTesting
@@ -161,7 +154,7 @@ public final class CatalogManager implements CatalogRegistry {
 
         private List<CatalogModificationListener> catalogModificationListeners =
                 Collections.emptyList();
-        private @Nullable CatalogStore catalogStore;
+        private CatalogStoreHolder catalogStoreHolder;
 
         public Builder classLoader(ClassLoader classLoader) {
             this.classLoader = classLoader;
@@ -195,15 +188,15 @@ public final class CatalogManager implements CatalogRegistry {
             return this;
         }
 
-        public Builder catalogStore(CatalogStore catalogStore) {
-            this.catalogStore = catalogStore;
+        public Builder catalogStoreHolder(CatalogStoreHolder catalogStoreHolder) {
+            this.catalogStoreHolder = catalogStoreHolder;
             return this;
         }
 
         public CatalogManager build() {
             checkNotNull(classLoader, "Class loader cannot be null");
             checkNotNull(config, "Config cannot be null");
-            checkNotNull(config, "CatalogStore cannot be null");
+            checkNotNull(catalogStoreHolder, "CatalogStoreHolder cannot be null");
             CatalogManager catalogManager =
                     new CatalogManager(
                             defaultCatalogName,
@@ -213,10 +206,7 @@ public final class CatalogManager implements CatalogRegistry {
                                     : new DataTypeFactoryImpl(classLoader, config, executionConfig),
                             new ManagedTableListener(classLoader, config),
                             catalogModificationListeners,
-                            catalogStore,
-                            classLoader,
-                            config);
-            catalogManager.open();
+                            catalogStoreHolder);
             return catalogManager;
         }
     }
@@ -229,21 +219,48 @@ public final class CatalogManager implements CatalogRegistry {
      * @throws CatalogException if an error occurs while initializing the CatalogStore.
      */
     public void open() throws CatalogException {
-        catalogStore.open();
+        catalogStoreHolder.open();
     }
 
     /**
-     * Closes the CatalogManager.
+     * Closes the catalog manager and releases its resources.
      *
      * <p>This method closes all initialized catalogs and the catalog store.
      *
      * @throws CatalogException if an error occurs while closing the catalogs or the catalog store
      */
     public void close() throws CatalogException {
-        for (Catalog catalog : catalogs.values()) {
-            catalog.close();
+        // close the initialized catalogs
+        List<Throwable> errors = new ArrayList<>();
+        for (Map.Entry<String, Catalog> entry : catalogs.entrySet()) {
+            String catalogName = entry.getKey();
+            Catalog catalog = entry.getValue();
+            try {
+                catalog.close();
+            } catch (Throwable e) {
+                LOG.error(
+                        String.format(
+                                "Failed to close catalog %s: %s", catalogName, e.getMessage()),
+                        e);
+                errors.add(e);
+            }
         }
-        catalogStore.close();
+
+        // close the catalog store holder
+        try {
+            catalogStoreHolder.close();
+        } catch (Throwable e) {
+            errors.add(e);
+            LOG.error(String.format("Failed to close catalog store holder: %s", e.getMessage()), e);
+        }
+
+        if (!errors.isEmpty()) {
+            CatalogException exception = new CatalogException("Failed to close catalog manager");
+            for (Throwable e : errors) {
+                exception.addSuppressed(e);
+            }
+            throw exception;
+        }
     }
 
     /**
@@ -286,7 +303,7 @@ public final class CatalogManager implements CatalogRegistry {
                 "Catalog name cannot be null or empty.");
         checkNotNull(catalogDescriptor, "Catalog descriptor cannot be null");
 
-        if (catalogStore.contains(catalogName)) {
+        if (catalogStoreHolder.catalogStore().contains(catalogName)) {
             throw new CatalogException(
                     format("Catalog %s already exists in catalog store.", catalogName));
         }
@@ -299,12 +316,15 @@ public final class CatalogManager implements CatalogRegistry {
         catalog.open();
         catalogs.put(catalogName, catalog);
 
-        catalogStore.storeCatalog(catalogName, catalogDescriptor);
+        catalogStoreHolder.catalogStore().storeCatalog(catalogName, catalogDescriptor);
     }
 
     private Catalog initCatalog(String catalogName, CatalogDescriptor catalogDescriptor) {
         return FactoryUtil.createCatalog(
-                catalogName, catalogDescriptor.getConfiguration().toMap(), config, classLoader);
+                catalogName,
+                catalogDescriptor.getConfiguration().toMap(),
+                catalogStoreHolder.config(),
+                catalogStoreHolder.classLoader());
     }
 
     /**
@@ -350,7 +370,8 @@ public final class CatalogManager implements CatalogRegistry {
                 !StringUtils.isNullOrWhitespaceOnly(catalogName),
                 "Catalog name cannot be null or empty.");
 
-        if (catalogs.containsKey(catalogName) || catalogStore.contains(catalogName)) {
+        if (catalogs.containsKey(catalogName)
+                || catalogStoreHolder.catalogStore().contains(catalogName)) {
             if (catalogName.equals(currentCatalogName)) {
                 throw new CatalogException("Cannot drop a catalog which is currently in use.");
             }
@@ -358,8 +379,8 @@ public final class CatalogManager implements CatalogRegistry {
                 Catalog catalog = catalogs.remove(catalogName);
                 catalog.close();
             }
-            if (catalogStore.contains(catalogName)) {
-                catalogStore.removeCatalog(catalogName, ignoreIfNotExists);
+            if (catalogStoreHolder.catalogStore().contains(catalogName)) {
+                catalogStoreHolder.catalogStore().removeCatalog(catalogName, ignoreIfNotExists);
             }
         } else if (!ignoreIfNotExists) {
             throw new CatalogException(format("Catalog %s does not exist.", catalogName));
@@ -383,7 +404,8 @@ public final class CatalogManager implements CatalogRegistry {
         }
 
         // Get catalog from the CatalogStore.
-        Optional<CatalogDescriptor> optionalDescriptor = catalogStore.getCatalog(catalogName);
+        Optional<CatalogDescriptor> optionalDescriptor =
+                catalogStoreHolder.catalogStore().getCatalog(catalogName);
         if (optionalDescriptor.isPresent()) {
             return Optional.of(initCatalog(catalogName, optionalDescriptor.get()));
         }
@@ -677,7 +699,9 @@ public final class CatalogManager implements CatalogRegistry {
      */
     public Set<String> listCatalogs() {
         return Collections.unmodifiableSet(
-                Stream.concat(catalogs.keySet().stream(), catalogStore.listCatalogs().stream())
+                Stream.concat(
+                                catalogs.keySet().stream(),
+                                catalogStoreHolder.catalogStore().listCatalogs().stream())
                         .collect(Collectors.toSet()));
     }
 

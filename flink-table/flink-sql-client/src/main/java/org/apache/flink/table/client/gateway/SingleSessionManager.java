@@ -154,9 +154,7 @@ public class SingleSessionManager implements SessionManager {
                     initializeSessionState(
                             environment,
                             configuration,
-                            resourceManager,
-                            TableFactoryUtil.findAndCreateCatalogStore(
-                                    configuration, userClassLoader)),
+                            resourceManager),
                     new OperationManager(operationExecutorService));
         }
 

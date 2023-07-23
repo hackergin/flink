@@ -293,6 +293,18 @@ public class TableFactoryUtil {
         }
     }
 
+    public static CatalogStore createCatalogStore(
+            CatalogStoreFactory factory, Configuration configuration, ClassLoader classLoader) {
+        String identifier = configuration.getString(CommonCatalogOptions.TABLE_CATALOG_STORE_KIND);
+        String catalogStoreOptionPrefix =
+                CommonCatalogOptions.TABLE_CATALOG_STORE_OPTION_PREFIX + identifier + ".";
+        Map<String, String> options =
+                new DelegatingConfiguration(configuration, catalogStoreOptionPrefix).toMap();
+        CatalogStoreFactory catalogStoreFactory =
+                FactoryUtil.discoverFactory(classLoader, CatalogStoreFactory.class, identifier);
+        return catalogStoreFactory.createCatalogStore();
+    }
+
     /**
      * Finds and creates a {@link CatalogStoreFactory} using the provided {@link Configuration} and
      * user classloader.
@@ -308,15 +320,23 @@ public class TableFactoryUtil {
     public static CatalogStoreFactory findAndCreateCatalogStoreFactory(
             Configuration configuration, ClassLoader classLoader) {
         String identifier = configuration.getString(CommonCatalogOptions.TABLE_CATALOG_STORE_KIND);
-        String catalogStoreOptionPrefix =
-                CommonCatalogOptions.TABLE_CATALOG_STORE_OPTION_PREFIX + identifier;
-        Map<String, String> options =
-                new DelegatingConfiguration(configuration, catalogStoreOptionPrefix).toMap();
+
         CatalogStoreFactory catalogStoreFactory =
                 FactoryUtil.discoverFactory(classLoader, CatalogStoreFactory.class, identifier);
+
+        return catalogStoreFactory;
+    }
+
+    public static CatalogStoreFactory.Context buildCatalogStoreFactoryContext(
+            Configuration configuration, ClassLoader classLoader) {
+        String identifier = configuration.getString(CommonCatalogOptions.TABLE_CATALOG_STORE_KIND);
+        String catalogStoreOptionPrefix =
+                CommonCatalogOptions.TABLE_CATALOG_STORE_OPTION_PREFIX + identifier + ".";
+        Map<String, String> options =
+                new DelegatingConfiguration(configuration, catalogStoreOptionPrefix).toMap();
         CatalogStoreFactory.Context context =
                 new FactoryUtil.DefaultCatalogStoreContext(options, configuration, classLoader);
-        catalogStoreFactory.open(context);
-        return catalogStoreFactory;
+
+        return context;
     }
 }
