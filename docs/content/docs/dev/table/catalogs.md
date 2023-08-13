@@ -819,7 +819,7 @@ Even if the session is reconstructed, previously created catalogs can still be r
 Users can configure the Catalog Store in different ways, one is to use the Table API, and another is to use YAML configuration.
 
 {{< tabs "9bb8994c-7c07-4c49-f5b8-f4ae3548ead4" >}}
-{{< tab "Java/Scala" >}}
+{{< tab "Java/Scala Using CatalogStore Instance" >}}
 ```java
 // Register a catalog store using catalog store instance.
 
@@ -834,6 +834,24 @@ final EnvironmentSettings settings =
 
 final TableEnvironment tableEnv = TableEnvironment.create(settings);
 
+// Register a catalog store using configuration.
+        
+// Set up configuration
+Configuration configuration = new Configuration();
+configuration.set("table.catalog-store.kind", "file");
+configuration.set("table.catalog-store.file.path", "file://path/to/catalog/store/");
+// set up the configuration.
+final EnvironmentSettings settings =
+        EnvironmentSettings.newInstance().inBatchMode()
+        .withConfiguration(configuration)
+        .build();
+
+final TableEnvironment tableEnv = TableEnvironment.create(settings);
+```
+{{< /tab >}}
+{{< tabs "3B1C791F-2B55-AC60-13E3-37A3067A011B" >}}
+{{< tab "Java/Scala Using configuration" >}}
+```java
 // Register a catalog store using configuration.
         
 // Set up configuration
@@ -889,6 +907,15 @@ automatically cleared after session reconstruction.
 FileCatalogStore can save the user's Catalog configuration to a file. Currently, it only supports
 local files. To use FileCatalogStore, you need to specify the directory where the Catalog configuration
 needs to be saved. Different Catalogs will correspond to different files and each file will correspond to a Catalog Name.
+
+Here's an example directory structure representing the storage of Catalog configurations using FileCatalogStore:
+
+```shell
+- /path/to/save/the/catalog/
+  - catalog1.yaml
+  - catalog2.yaml
+  - catalog3.yaml
+```
 
 <table class="table table-bordered">
     <thead>
