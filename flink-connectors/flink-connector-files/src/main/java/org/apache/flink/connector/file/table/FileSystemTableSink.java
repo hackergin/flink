@@ -51,6 +51,7 @@ import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.TableException;
 import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.catalog.ObjectIdentifier;
+import org.apache.flink.table.catalog.StagedTable;
 import org.apache.flink.table.connector.ChangelogMode;
 import org.apache.flink.table.connector.ProviderContext;
 import org.apache.flink.table.connector.format.DecodingFormat;
@@ -59,6 +60,7 @@ import org.apache.flink.table.connector.sink.DataStreamSinkProvider;
 import org.apache.flink.table.connector.sink.DynamicTableSink;
 import org.apache.flink.table.connector.sink.abilities.SupportsOverwrite;
 import org.apache.flink.table.connector.sink.abilities.SupportsPartitioning;
+import org.apache.flink.table.connector.sink.abilities.SupportsStaging;
 import org.apache.flink.table.connector.source.DynamicTableSource;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.factories.FactoryUtil;
@@ -93,7 +95,7 @@ import static org.apache.flink.connector.file.table.stream.compact.CompactOperat
 /** File system {@link DynamicTableSink}. */
 @Internal
 public class FileSystemTableSink extends AbstractFileSystemTable
-        implements DynamicTableSink, SupportsPartitioning, SupportsOverwrite {
+        implements DynamicTableSink, SupportsPartitioning, SupportsOverwrite, SupportsStaging {
 
     // For compaction reading
     @Nullable private final DecodingFormat<BulkFormat<RowData, FileSourceSplit>> bulkReaderFormat;
@@ -108,6 +110,8 @@ public class FileSystemTableSink extends AbstractFileSystemTable
     private LinkedHashMap<String, String> staticPartitions = new LinkedHashMap<>();
 
     @Nullable private Integer configuredParallelism;
+
+    @Nullable private FileSystemStagedTable fileSystemStagedTable = null;
 
     FileSystemTableSink(
             ObjectIdentifier tableIdentifier,
@@ -150,9 +154,9 @@ public class FileSystemTableSink extends AbstractFileSystemTable
         final int inputParallelism = dataStream.getParallelism();
         final int parallelism = Optional.ofNullable(configuredParallelism).orElse(inputParallelism);
         boolean parallelismConfigued = configuredParallelism != null;
-
+        boolean isAtomicCtas = fileSystemStagedTable != null;
         if (sinkContext.isBounded()) {
-            return createBatchSink(dataStream, sinkContext, parallelism, parallelismConfigued);
+            return createBatchSink(dataStream, sinkContext, parallelism, parallelismConfigued, isAtomicCtas);
         } else {
             if (overwrite) {
                 throw new IllegalStateException("Streaming mode not support overwrite.");
@@ -175,8 +179,31 @@ public class FileSystemTableSink extends AbstractFileSystemTable
             DataStream<RowData> inputStream,
             Context sinkContext,
             final int parallelism,
-            boolean parallelismConfigured) {
+            boolean parallelismConfigured,
+            boolean isAtomicCtas) {
         FileSystemOutputFormat.Builder<RowData> builder = new FileSystemOutputFormat.Builder<>();
+        PartitionCommitPolicyFactory precommitPolicyFactory = new PartitionCommitPolicyFactory(
+                "success-file",
+                tableOptions.get(
+                        FileSystemConnectorOptions
+                                .SINK_PARTITION_COMMIT_POLICY_CLASS),
+                tableOptions.get(
+                        FileSystemConnectorOptions
+                                .SINK_PARTITION_COMMIT_SUCCESS_FILE_NAME),
+                tableOptions.get(
+                        FileSystemConnectorOptions
+                                .SINK_PARTITION_COMMIT_POLICY_CLASS_PARAMETERS));
+        PartitionCommitPolicyFactory commitPolicyFactory = new PartitionCommitPolicyFactory(
+                "metastore",
+                tableOptions.get(
+                        FileSystemConnectorOptions
+                                .SINK_PARTITION_COMMIT_POLICY_CLASS),
+                tableOptions.get(
+                        FileSystemConnectorOptions
+                                .SINK_PARTITION_COMMIT_SUCCESS_FILE_NAME),
+                tableOptions.get(
+                        FileSystemConnectorOptions
+                                .SINK_PARTITION_COMMIT_POLICY_CLASS_PARAMETERS));
         builder.setPartitionComputer(partitionComputer())
                 .setDynamicGrouped(dynamicGrouping)
                 .setPartitionColumns(partitionKeys.toArray(new String[0]))
@@ -189,21 +216,14 @@ public class FileSystemTableSink extends AbstractFileSystemTable
                         OutputFileConfig.builder()
                                 .withPartPrefix("part-" + UUID.randomUUID())
                                 .build())
-                .setPartitionCommitPolicyFactory(
-                        new PartitionCommitPolicyFactory(
-                                tableOptions.get(
-                                        FileSystemConnectorOptions
-                                                .SINK_PARTITION_COMMIT_POLICY_KIND),
-                                tableOptions.get(
-                                        FileSystemConnectorOptions
-                                                .SINK_PARTITION_COMMIT_POLICY_CLASS),
-                                tableOptions.get(
-                                        FileSystemConnectorOptions
-                                                .SINK_PARTITION_COMMIT_SUCCESS_FILE_NAME),
-                                tableOptions.get(
-                                        FileSystemConnectorOptions
-                                                .SINK_PARTITION_COMMIT_POLICY_CLASS_PARAMETERS)));
+                .setPartitionCommitPolicyFactory(precommitPolicyFactory);
 
+        if (isAtomicCtas) {
+            fileSystemStagedTable.setDynamicGrouped(dynamicGrouping);
+            fileSystemStagedTable.setTmpPath(toStagingPath());
+            fileSystemStagedTable.setStaticPartitions(staticPartitions);
+            fileSystemStagedTable.setPartitionCommitPolicyFactory(commitPolicyFactory);
+        }
         DataStreamSink<RowData> sink = inputStream.writeUsingOutputFormat(builder.build());
         sink.getTransformation().setParallelism(parallelism, parallelismConfigured);
         return sink.name("Filesystem");
@@ -549,6 +569,12 @@ public class FileSystemTableSink extends AbstractFileSystemTable
     @Override
     public void applyStaticPartition(Map<String, String> partition) {
         this.staticPartitions = toPartialLinkedPartSpec(partition);
+    }
+
+    @Override
+    public StagedTable applyStaging(StagingContext context) {
+        fileSystemStagedTable = new FileSystemStagedTable();
+        return fileSystemStagedTable;
     }
 
     /** Table bucket assigner, wrap {@link PartitionComputer}. */
