@@ -3709,9 +3709,14 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
                 checkRollUp(grandParent, parent, stripDot, scope, contextClause);
             } else {
                 List<? extends @Nullable SqlNode> children = ((SqlCall) stripDot).getOperandList();
-                for (SqlNode child : children) {
-                    checkRollUp(parent, current, child, scope, contextClause);
+                if (((SqlCall) current).getOperator() == SqlStdOperatorTable.ARGUMENT_ASSIGNMENT) {
+                    checkRollUp(parent, current, ((SqlCall) current).getOperandList().get(0), scope, contextClause);
+                } else {
+                    for (SqlNode child : children) {
+                        checkRollUp(parent, current, child, scope, contextClause);
+                    }
                 }
+
             }
         } else if (current instanceof SqlIdentifier) {
             SqlIdentifier id = (SqlIdentifier) current;

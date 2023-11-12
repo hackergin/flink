@@ -226,6 +226,20 @@ class CorrelateITCase extends BatchTestBase {
   }
 
   @Test
+  def testTableFunctionWithVariableNamedArguments(): Unit = {
+//    registerFunction("func", new VarArgsFunc0)
+    registerTemporarySystemFunction("func", classOf[VarArgsFunc0])
+    checkResult(
+      "select c, d from inputT, LATERAL TABLE(func(a => '1', b => '2', c => c)) as T0(d) where c = 'Jack#22'",
+      Seq(
+        row("Jack#22", 1),
+        row("Jack#22", 2),
+        row("Jack#22", "Jack#22")
+      )
+    )
+  }
+
+  @Test
   def testPojoField(): Unit = {
     val data = Seq(row(new MyPojo(5, 105)), row(new MyPojo(6, 11)), row(new MyPojo(7, 12)))
     registerCollection(

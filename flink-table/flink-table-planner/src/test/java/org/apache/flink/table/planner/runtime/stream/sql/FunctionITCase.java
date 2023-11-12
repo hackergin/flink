@@ -1125,7 +1125,7 @@ public class FunctionITCase extends StreamingTestBase {
 
         tEnv().executeSql(
                         "INSERT INTO SinkTable "
-                                + "SELECT LongestStringAggregateFunction(s), RawMapViewAggregateFunction(s) "
+                                + "SELECT LongestStringAggregateFunction(`value` => s), RawMapViewAggregateFunction(s) "
                                 + "FROM SourceTable "
                                 + "GROUP BY TUMBLE(ts, INTERVAL '1' SECOND)")
                 .await();
@@ -1307,6 +1307,20 @@ public class FunctionITCase extends StreamingTestBase {
         CollectionUtil.iteratorToList(
                 tEnv().executeSql("SELECT BoolEcho(x=1 and y is null) FROM SourceTable").collect());
     }
+
+    @Test
+    public void testWithBoolNotNullNamedParametersTypeHint() {
+        List<Row> sourceData = Arrays.asList(Row.of(1, 2), Row.of(2, 3));
+        TestCollectionTableFactory.reset();
+        TestCollectionTableFactory.initData(sourceData);
+
+        tEnv().executeSql(
+                "CREATE TABLE SourceTable(x INT NOT NULL,y INT) WITH ('connector' = 'COLLECTION')");
+        tEnv().executeSql("CREATE FUNCTION BoolEcho AS '" + BoolEcho.class.getName() + "'");
+        CollectionUtil.iteratorToList(
+                tEnv().executeSql("SELECT BoolEcho(a => x=1 and y is null) FROM SourceTable").collect());
+    }
+
 
     @Test
     public void testUsingAddJar() throws Exception {
@@ -1793,10 +1807,14 @@ public class FunctionITCase extends StreamingTestBase {
         }
     }
 
-    /** A function that takes BOOLEAN NOT NULL. */
+    /** A function that takes BOOLE
+     * AN NOT NULL. */
+    @FunctionHint(argumentNames = {"a"})
     public static class BoolEcho extends ScalarFunction {
-        public Boolean eval(@DataTypeHint("BOOLEAN NOT NULL") Boolean b) {
-            return b;
+
+        @FunctionHint(argumentNames = {"a"})
+        public Boolean eval(@DataTypeHint("BOOLEAN NOT NULL")Boolean a) {
+            return a;
         }
     }
 

@@ -18,6 +18,9 @@
 
 package org.apache.flink.table.planner.functions.inference;
 
+import org.apache.calcite.rel.type.RelDataTypeFactory;
+import org.apache.calcite.sql.type.SqlOperandMetadata;
+
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.catalog.DataTypeFactory;
@@ -57,7 +60,7 @@ import static org.apache.flink.table.types.logical.utils.LogicalTypeCasts.suppor
  * <p>Note: This class must be kept in sync with {@link TypeInferenceUtil}.
  */
 @Internal
-public final class TypeInferenceOperandChecker implements SqlOperandTypeChecker {
+public final class TypeInferenceOperandChecker implements SqlOperandMetadata {
 
     private final DataTypeFactory dataTypeFactory;
 
@@ -160,6 +163,20 @@ public final class TypeInferenceOperandChecker implements SqlOperandTypeChecker 
         final SqlValidatorNamespace namespace = validator.getNamespace(node);
         if (namespace != null) {
             namespace.setType(type);
+        }
+    }
+
+    @Override
+    public List<RelDataType> paramTypes(RelDataTypeFactory typeFactory) {
+        return null;
+    }
+
+    @Override
+    public List<String> paramNames() {
+        if (typeInference.getNamedArguments().isPresent()) {
+            return typeInference.getNamedArguments().get();
+        } else {
+            throw new UnsupportedOperationException("Please add named parameter for this function");
         }
     }
 }

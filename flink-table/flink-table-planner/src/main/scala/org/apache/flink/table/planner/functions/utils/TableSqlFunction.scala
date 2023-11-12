@@ -28,7 +28,6 @@ import org.apache.flink.table.planner.plan.schema.FlinkTableFunction
 import org.apache.flink.table.runtime.types.TypeInfoLogicalTypeConverter.fromTypeInfoToLogicalType
 import org.apache.flink.table.types.DataType
 import org.apache.flink.table.types.logical.LogicalType
-
 import org.apache.calcite.rel.`type`.{RelDataType, RelDataTypeFactory}
 import org.apache.calcite.sql._
 import org.apache.calcite.sql.`type`._
@@ -233,8 +232,11 @@ class OperandMetadata(name: String, udtf: TableFunction[_], methods: Array[Metho
       "SqlOperandMetadata.paramTypes "
         + "should never be invoked")
 
-  override def paramNames(): util.List[String] =
-    throw new UnsupportedOperationException(
-      "SqlOperandMetadata.paramNames "
-        + "should never be invoked")
+  override def paramNames(): util.List[String] = {
+    val list = new util.ArrayList[String]
+    list.add("a")
+    list.add("b")
+    list.add("c")
+    list
+  }
 }

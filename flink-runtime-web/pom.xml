@@ -129,9 +129,9 @@ under the License.
 					<name>use-alibaba-mirror</name>
 				</property>
 			</activation>
-			<properties>
-				<npm.proxy>--registry http://172.17.0.1:8888/repository/npm/</npm.proxy>
-			</properties>
+<!--			<properties>-->
+<!--				<npm.proxy>&#45;&#45;registry http://127.0.0.1:7890/repository/npm/</npm.proxy>-->
+<!--			</properties>-->
 		</profile>
 	</profiles>
 

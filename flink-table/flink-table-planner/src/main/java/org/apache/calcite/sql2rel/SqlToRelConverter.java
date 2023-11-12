@@ -6062,8 +6062,13 @@ public class SqlToRelConverter {
                             break;
                         }
                     }
-                    RexNode convertedExpr = bb.convertExpression(operand);
-                    args.add(lookupOrCreateGroupExpr(convertedExpr));
+                    if (operand instanceof SqlBasicCall && ((SqlBasicCall) operand).getOperator() == SqlStdOperatorTable.ARGUMENT_ASSIGNMENT) {
+                        RexNode convertedExpr = bb.convertExpression(((SqlBasicCall) operand).getOperandList().get(0));
+                        args.add(lookupOrCreateGroupExpr(convertedExpr));
+                    } else {
+                        RexNode convertedExpr = bb.convertExpression(operand);
+                        args.add(lookupOrCreateGroupExpr(convertedExpr));
+                    }
                 }
 
                 if (filter != null) {

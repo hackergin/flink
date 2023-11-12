@@ -21,17 +21,15 @@ import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.api.java.tuple.Tuple3
 import org.apache.flink.api.java.typeutils.RowTypeInfo
 import org.apache.flink.api.scala.typeutils.Types
-import org.apache.flink.table.annotation.DataTypeHint
+import org.apache.flink.table.annotation.{DataTypeHint, FunctionHint}
 import org.apache.flink.table.api.ValidationException
 import org.apache.flink.table.functions.{FunctionContext, ScalarFunction, TableFunction}
 import org.apache.flink.table.functions.python.{PythonEnv, PythonFunction}
 import org.apache.flink.table.planner.JList
 import org.apache.flink.types.Row
-
 import org.junit.Assert
 
 import java.util
-
 import scala.annotation.varargs
 
 case class SimpleUser(name: String, age: Int)
@@ -407,10 +405,13 @@ class RF extends ScalarFunction {
 }
 
 @SerialVersionUID(1L)
+@FunctionHint(argumentNames = Array("a", "b", "c"))
 class VarArgsFunc0 extends TableFunction[String] {
-  @varargs
-  def eval(str: String*): Unit = {
-    str.foreach(collect)
+  @FunctionHint(argumentNames = Array("a", "b", "c"))
+  def eval(a: String, b: String, c: String): Unit = {
+    collect(a)
+    collect(b)
+    collect(c)
   }
 }
 

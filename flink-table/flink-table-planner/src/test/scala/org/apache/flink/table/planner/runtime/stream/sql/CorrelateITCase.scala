@@ -378,7 +378,7 @@ class CorrelateITCase extends StreamingTestBase {
     val t1 = env.fromCollection(data).toTable(tEnv, 'a, 'b, 'c)
     tEnv.createTemporaryView("T1", t1)
 
-    val sql = "SELECT b, v FROM T1 left join lateral table(STRING_SPLIT(c, '|')) as T(v) on true"
+    val sql = "SELECT b, v FROM T1 left join lateral table(STRING_SPLIT(a => c, b => '|')) as T(v) on true"
 
     val result = tEnv.sqlQuery(sql)
     val sink = TestSinkUtil.configureSink(result, new TestingAppendTableSink)

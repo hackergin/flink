@@ -25,8 +25,10 @@ import org.apache.flink.table.runtime.types.TypeInfoDataTypeConverter.fromDataTy
 import org.apache.flink.table.runtime.types.TypeInfoLogicalTypeConverter.fromTypeInfoToLogicalType
 import org.apache.flink.table.types.DataType
 import org.apache.flink.table.typeutils.FieldInfoUtils
-
 import org.apache.calcite.rel.`type`.{RelDataType, RelDataTypeFactory}
+import org.apache.calcite.schema.FunctionParameter
+
+import java.util
 
 /**
  * A Typed Function is a Table Function which the result type has already been determined. The

@@ -969,6 +969,15 @@ class TemporalTypesTest extends ExpressionTestBase {
     testSqlApi("UNIX_TIMESTAMP('2015/07/24 10:00:00.5', 'yyyy/MM/dd HH:mm:ss.S')", "1437699600")
   }
 
+  @Test
+  def testUnixTimestampInTokyo2(): Unit = {
+    tableConfig.setLocalTimeZone(ZoneId.of("Asia/Tokyo"))
+    testSqlApi("UNIX_TIMESTAMP(DATA => '2015-07-24 10:00:00')", "1437699600")
+//    testSqlApi("UNIX_TIMESTAMP('2015/07/24 10:00:00.5', 'yyyy/MM/dd HH:mm:ss.S')", "1437699600")
+  }
+
+
+
   /**
    * now Flink only support TIMESTAMP(3) as the return type in TO_TIMESTAMP See:
    * https://issues.apache.org/jira/browse/FLINK-14925
