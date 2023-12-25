@@ -32,6 +32,7 @@ import org.apache.flink.table.catalog.CatalogStore;
 import org.apache.flink.table.catalog.GenericInMemoryCatalogStore;
 import org.apache.flink.table.catalog.listener.CatalogListener1;
 import org.apache.flink.table.catalog.listener.CatalogListener2;
+import org.apache.flink.table.factories.TestCatalogStoreFactory;
 import org.apache.flink.types.Row;
 
 import org.junit.jupiter.api.Test;
@@ -41,6 +42,7 @@ import java.util.Arrays;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
+import static org.apache.flink.table.catalog.CommonCatalogOptions.TABLE_CATALOG_STORE_KIND;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -155,6 +157,24 @@ class EnvironmentTest {
                         env2.getCatalogManager().getCatalogModificationListeners().stream()
                                 .map(c -> c.getClass().getName())
                                 .collect(Collectors.toList()));
+    }
+
+    @Test
+    void testRegisterCatalogStoreUsingTableEnvironment() {
+        Configuration configuration = new Configuration();
+
+        configuration.setString(TABLE_CATALOG_STORE_KIND, "test-catalog-store");
+        EnvironmentSettings settings =
+                EnvironmentSettings.newInstance().withConfiguration(configuration).build();
+
+        TableEnvironment tbEnv = TableEnvironment.create(settings);
+
+        Configuration catalogConfiguration = new Configuration();
+        catalogConfiguration.setString("type", "generic_in_memory");
+        tbEnv.createCatalog(
+                "test_catalog", CatalogDescriptor.of("test_catalog", catalogConfiguration));
+
+        assertTrue(TestCatalogStoreFactory.SHARED_DESCRIPTORS.containsKey("test_catalog"));
     }
 
     @Test

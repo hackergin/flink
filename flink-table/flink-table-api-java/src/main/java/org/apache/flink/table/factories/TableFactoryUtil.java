@@ -19,9 +19,12 @@
 package org.apache.flink.table.factories;
 
 import org.apache.flink.annotation.Internal;
+import org.apache.flink.configuration.ConfigOption;
+import org.apache.flink.configuration.ConfigOptions;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.DelegatingConfiguration;
 import org.apache.flink.configuration.ReadableConfig;
+import org.apache.flink.table.api.TableConfig;
 import org.apache.flink.table.api.TableException;
 import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.api.config.TableConfigOptions;
@@ -39,6 +42,7 @@ import org.apache.flink.table.sources.TableSource;
 import javax.annotation.Nullable;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -204,7 +208,7 @@ public class TableFactoryUtil {
     }
 
     /**
-     * Finds and creates a {@link CatalogStoreFactory} using the provided {@link Configuration} and
+     * Finds and creates a {@link CatalogStoreFactory} using the provided {@link ReadableConfig} and
      * user classloader.
      *
      * <p>The configuration format should be as follows:
@@ -216,8 +220,8 @@ public class TableFactoryUtil {
      * }</pre>
      */
     public static CatalogStoreFactory findAndCreateCatalogStoreFactory(
-            Configuration configuration, ClassLoader classLoader) {
-        String identifier = configuration.getString(CommonCatalogOptions.TABLE_CATALOG_STORE_KIND);
+            ReadableConfig readableConfig, ClassLoader classLoader) {
+        String identifier = readableConfig.get(CommonCatalogOptions.TABLE_CATALOG_STORE_KIND);
 
         CatalogStoreFactory catalogStoreFactory =
                 FactoryUtil.discoverFactory(classLoader, CatalogStoreFactory.class, identifier);
@@ -237,15 +241,14 @@ public class TableFactoryUtil {
      * }</pre>
      */
     public static CatalogStoreFactory.Context buildCatalogStoreFactoryContext(
-            Configuration configuration, ClassLoader classLoader) {
-        String identifier = configuration.getString(CommonCatalogOptions.TABLE_CATALOG_STORE_KIND);
-        String catalogStoreOptionPrefix =
-                CommonCatalogOptions.TABLE_CATALOG_STORE_OPTION_PREFIX + identifier + ".";
-        Map<String, String> options =
-                new DelegatingConfiguration(configuration, catalogStoreOptionPrefix).toMap();
-        CatalogStoreFactory.Context context =
-                new FactoryUtil.DefaultCatalogStoreContext(options, configuration, classLoader);
+            ReadableConfig readableConfig, ClassLoader classLoader) {
+        String identifier = readableConfig.get(CommonCatalogOptions.TABLE_CATALOG_STORE_KIND);
+        ConfigOption<Map<String, String>> catalogStoreMapOptions =
+                ConfigOptions.key("table.catalog-store.kind." + identifier)
+                        .mapType()
+                        .defaultValue(new HashMap<>());
+        Map<String, String> options = readableConfig.get(catalogStoreMapOptions);
 
-        return context;
+        return new FactoryUtil.DefaultCatalogStoreContext(options, readableConfig, classLoader);
     }
 }
