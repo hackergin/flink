@@ -110,6 +110,8 @@ public @interface DataTypeHint {
      */
     String value() default "";
 
+    /** Used to indicate whether the parameter is optional or not. */
+    boolean isOptional() default true;
     /**
      * Adds a hint that data should be represented using the given class when entering or leaving
      * the table ecosystem.
@@ -285,4 +287,6 @@ public @interface DataTypeHint {
      * <p>By default, those data types are extracted with nano second precision.
      */
     int defaultSecondPrecision() default -1;
+
+    String defaultValueString() default "";
 }

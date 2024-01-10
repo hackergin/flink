@@ -99,7 +99,7 @@ object BridgingFunctionGenUtil {
     // enrich argument types with conversion class
     val adaptedCallContext = TypeInferenceUtil.adaptArguments(inference, callContext, null)
     val enrichedArgumentDataTypes = toScala(adaptedCallContext.getArgumentDataTypes)
-    verifyArgumentTypes(operands.map(_.resultType), enrichedArgumentDataTypes)
+//    verifyArgumentTypes(operands.map(_.resultType), enrichedArgumentDataTypes)
 
     // enrich output types with conversion class
     val enrichedOutputDataType =

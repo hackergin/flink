@@ -93,6 +93,16 @@ public class DataTypeHintMock implements DataTypeHint {
     }
 
     @Override
+    public boolean isOptional() {
+        return DEFAULT_ANNOTATION.isOptional();
+    }
+
+    @Override
+    public String defaultValueString() {
+        return DEFAULT_ANNOTATION.defaultValueString();
+    }
+
+    @Override
     public Class<? extends Annotation> annotationType() {
         return DataTypeHint.class;
     }

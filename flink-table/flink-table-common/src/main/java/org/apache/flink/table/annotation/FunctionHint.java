@@ -148,6 +148,8 @@ public @interface FunctionHint {
      */
     String[] argumentNames() default {""};
 
+    ArgumentHint[] arguments() default {@ArgumentHint};
+
     /**
      * Explicitly defines the intermediate result type that a function uses as accumulator.
      *

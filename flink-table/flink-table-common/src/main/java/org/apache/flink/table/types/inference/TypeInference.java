@@ -44,6 +44,8 @@ import java.util.Optional;
 @PublicEvolving
 public final class TypeInference {
 
+    private final @Nullable List<Boolean> optionalArguments;
+
     private final @Nullable List<String> namedArguments;
 
     private final @Nullable List<DataType> typedArguments;
@@ -57,11 +59,13 @@ public final class TypeInference {
     private TypeInference(
             @Nullable List<String> namedArguments,
             @Nullable List<DataType> typedArguments,
+            @Nullable List<Boolean> optionalArguments,
             InputTypeStrategy inputTypeStrategy,
             @Nullable TypeStrategy accumulatorTypeStrategy,
             TypeStrategy outputTypeStrategy) {
         this.namedArguments = namedArguments;
         this.typedArguments = typedArguments;
+        this.optionalArguments = optionalArguments;
         this.inputTypeStrategy = inputTypeStrategy;
         this.accumulatorTypeStrategy = accumulatorTypeStrategy;
         this.outputTypeStrategy = outputTypeStrategy;
@@ -88,6 +92,10 @@ public final class TypeInference {
         return Optional.ofNullable(typedArguments);
     }
 
+    public Optional<List<Boolean>> getOptionalArguments() {
+        return Optional.ofNullable(optionalArguments);
+    }
+
     public InputTypeStrategy getInputTypeStrategy() {
         return inputTypeStrategy;
     }
@@ -109,6 +117,8 @@ public final class TypeInference {
         private @Nullable List<String> namedArguments;
 
         private @Nullable List<DataType> typedArguments;
+
+        private @Nullable List<Boolean> optionalArguments;
 
         private InputTypeStrategy inputTypeStrategy = InputTypeStrategies.WILDCARD;
 
@@ -132,6 +142,11 @@ public final class TypeInference {
             this.namedArguments =
                     Preconditions.checkNotNull(
                             argumentNames, "List of argument names must not be null.");
+            return this;
+        }
+
+        public Builder optionalArguments(List<Boolean> optionalArguments) {
+            this.optionalArguments = optionalArguments;
             return this;
         }
 
@@ -199,6 +214,7 @@ public final class TypeInference {
             return new TypeInference(
                     namedArguments,
                     typedArguments,
+                    optionalArguments,
                     inputTypeStrategy,
                     accumulatorTypeStrategy,
                     Preconditions.checkNotNull(

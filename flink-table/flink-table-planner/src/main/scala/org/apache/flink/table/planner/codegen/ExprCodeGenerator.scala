@@ -457,28 +457,33 @@ class ExprCodeGenerator(ctx: CodeGeneratorContext, nullableInput: Boolean)
     throw new CodeGenException("Dynamic parameter references are not supported yet.")
 
   override def visitCall(call: RexCall): GeneratedExpression = {
-    val resultType = FlinkTypeFactory.toLogicalType(call.getType)
-    if (call.getKind == SqlKind.SEARCH) {
-      return generateSearch(
-        ctx,
-        generateExpression(call.getOperands.get(0)),
-        call.getOperands.get(1).asInstanceOf[RexLiteral])
+    if (call.getOperator.getKind == SqlKind.DEFAULT) {
+      generateNullLiteral(new NullType)
+    } else {
+      val resultType = FlinkTypeFactory.toLogicalType(call.getType)
+      if (call.getKind == SqlKind.SEARCH) {
+        return generateSearch(
+          ctx,
+          generateExpression(call.getOperands.get(0)),
+          call.getOperands.get(1).asInstanceOf[RexLiteral])
+      }
+
+      // convert operands and help giving untyped NULL literals a type
+      val operands = call.getOperands.zipWithIndex.map {
+
+        // this helps e.g. for AS(null)
+        // we might need to extend this logic in case some rules do not create typed NULLs
+        case (operandLiteral: RexLiteral, 0)
+            if operandLiteral.getType.getSqlTypeName == SqlTypeName.NULL &&
+              call.getOperator.getReturnTypeInference == ReturnTypes.ARG0 =>
+          generateNullLiteral(resultType)
+
+        case (o @ _, _) => o.accept(this)
+      }
+
+      generateCallExpression(ctx, call, operands, resultType)
     }
 
-    // convert operands and help giving untyped NULL literals a type
-    val operands = call.getOperands.zipWithIndex.map {
-
-      // this helps e.g. for AS(null)
-      // we might need to extend this logic in case some rules do not create typed NULLs
-      case (operandLiteral: RexLiteral, 0)
-          if operandLiteral.getType.getSqlTypeName == SqlTypeName.NULL &&
-            call.getOperator.getReturnTypeInference == ReturnTypes.ARG0 =>
-        generateNullLiteral(resultType)
-
-      case (o @ _, _) => o.accept(this)
-    }
-
-    generateCallExpression(ctx, call, operands, resultType)
   }
 
   override def visitOver(over: RexOver): GeneratedExpression =

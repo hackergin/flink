@@ -921,10 +921,10 @@ object CodeGenUtils {
     val targetType = targetDataType.getLogicalType
     val targetTypeTerm = boxedTypeTermForType(targetType)
 
-    // untyped null literal
-    if (internalExpr.resultType.is(NULL)) {
-      return s"($targetTypeTerm) null"
-    }
+//    // untyped null literal
+//    if (internalExpr.resultType.is(NULL)) {
+//      return s"($targetTypeTerm) null"
+//    }
 
     // convert internal structure to target type
     val externalResultTerm = if (isInternal(targetDataType)) {

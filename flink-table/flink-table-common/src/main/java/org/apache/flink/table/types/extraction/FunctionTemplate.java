@@ -19,6 +19,7 @@
 package org.apache.flink.table.types.extraction;
 
 import org.apache.flink.annotation.Internal;
+import org.apache.flink.table.annotation.ArgumentHint;
 import org.apache.flink.table.annotation.DataTypeHint;
 import org.apache.flink.table.annotation.FunctionHint;
 import org.apache.flink.table.annotation.ProcedureHint;
@@ -67,7 +68,9 @@ final class FunctionTemplate {
                 createSignatureTemplate(
                         typeFactory,
                         defaultAsNull(hint, FunctionHint::input),
-                        defaultAsNull(hint, FunctionHint::argumentNames),
+                        Arrays.stream(defaultAsNull(hint, FunctionHint::arguments))
+                                .map(ArgumentHint::name)
+                                .toArray(String[]::new),
                         hint.isVarArgs()),
                 createResultTemplate(typeFactory, defaultAsNull(hint, FunctionHint::accumulator)),
                 createResultTemplate(typeFactory, defaultAsNull(hint, FunctionHint::output)));
@@ -184,7 +187,10 @@ final class FunctionTemplate {
                         .map(dataTypeHint -> createArgumentTemplate(typeFactory, dataTypeHint))
                         .collect(Collectors.toList()),
                 isVarArg,
-                argumentNames);
+                argumentNames,
+                Arrays.stream(input)
+                        .map(dataTypeHint -> dataTypeHint.isOptional())
+                        .collect(Collectors.toList()));
     }
 
     private static FunctionArgumentTemplate createArgumentTemplate(

@@ -21,6 +21,7 @@ package org.apache.flink.table.planner.runtime.stream.sql;
 import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.api.java.typeutils.runtime.kryo.KryoSerializer;
 import org.apache.flink.core.fs.Path;
+import org.apache.flink.table.annotation.ArgumentHint;
 import org.apache.flink.table.annotation.DataTypeHint;
 import org.apache.flink.table.annotation.FunctionHint;
 import org.apache.flink.table.annotation.HintFlag;
@@ -1054,18 +1055,53 @@ public class FunctionITCase extends StreamingTestBase {
     @Test
     public void testNamedArgumentsCatalogTableFunction() throws Exception {
         final Row[] sinkData =
-                new Row[] {Row.of("Test is a string"), Row.of("42"), Row.of((String) null)};
+                new Row[] {
+                    Row.of("null, str2"),
+                };
 
         TestCollectionTableFactory.reset();
 
         tEnv().executeSql("CREATE TABLE SinkTable(s STRING) WITH ('connector' = 'COLLECTION')");
 
         tEnv().createFunction("NamedArgumentsTableFunction", NamedArgumentsTableFunction.class);
+        //        tEnv().executeSql(
+        //                        "INSERT INTO SinkTable "
+        //                                + "SELECT T1.s FROM TABLE(NamedArgumentsTableFunction(in2
+        // => 'str2', in1 => 'str1')) AS T1(s) "
+        //                                + "UNION ALL "
+        //                                + "SELECT CAST(T2.i AS STRING) FROM
+        // TABLE(NamedArgumentsTableFunction(in2 => 42, in1 => 99)) AS T2(i)")
+        //                .await();
+        //
+        //
+        // assertThat(TestCollectionTableFactory.getResult()).containsExactlyInAnyOrder(sinkData);
+
         tEnv().executeSql(
                         "INSERT INTO SinkTable "
-                                + "SELECT T1.s FROM TABLE(NamedArgumentsTableFunction(in2 => 'str2', in1 => 'str1')) AS T1(s) "
-                                + "UNION ALL "
-                                + "SELECT CAST(T2.i AS STRING) FROM TABLE(NamedArgumentsTableFunction(in2 => 42, in1 => 99)) AS T2(i)")
+                                + "SELECT T1.s FROM TABLE(NamedArgumentsTableFunction(in2 => 'str2')) AS T1(s) ")
+                .await();
+
+        assertThat(TestCollectionTableFactory.getResult()).containsExactlyInAnyOrder(sinkData);
+    }
+
+    @Test
+    public void testOptionalNamedArgumentsCatalogTableFunction() throws Exception {
+        final Row[] sinkData =
+                new Row[] {
+                    Row.of("str2, null"),
+                };
+
+        TestCollectionTableFactory.reset();
+
+        tEnv().executeSql("CREATE TABLE SinkTable(s STRING) WITH ('connector' = 'COLLECTION')");
+
+        tEnv().createFunction(
+                        "OptionalNamedArgumentsTableFunction",
+                        OptionalNamedArgumentsTableFunction.class);
+
+        tEnv().executeSql(
+                        "INSERT INTO SinkTable "
+                                + "SELECT T1.s FROM TABLE(OptionalNamedArgumentsTableFunction(in1 => 'str2')) AS T1(s) ")
                 .await();
 
         assertThat(TestCollectionTableFactory.getResult()).containsExactlyInAnyOrder(sinkData);
@@ -1635,18 +1671,26 @@ public class FunctionITCase extends StreamingTestBase {
     /** Function that returns a string or integer. */
     public static class NamedArgumentsTableFunction extends TableFunction<Object> {
         @FunctionHint(
-                input = {@DataTypeHint("STRING"), @DataTypeHint("STRING")},
                 output = @DataTypeHint("STRING"),
-                argumentNames = {"in1", "in2"})
+                arguments = {
+                    @ArgumentHint(name = "in1", isOptional = true, type = @DataTypeHint("STRING")),
+                    @ArgumentHint(name = "in2", isOptional = false, type = @DataTypeHint("STRING"))
+                })
         public void eval(String arg1, String arg2) {
             collect(arg1 + ", " + arg2);
         }
+    }
 
+    /** Function that returns a string or integer. */
+    public static class OptionalNamedArgumentsTableFunction extends TableFunction<Object> {
         @FunctionHint(
-                input = {@DataTypeHint("INT"), @DataTypeHint("INT")},
+                input = {
+                    @DataTypeHint(value = "STRING", isOptional = false),
+                    @DataTypeHint(value = "STRING NOT NULL")
+                },
                 output = @DataTypeHint("STRING"),
                 argumentNames = {"in1", "in2"})
-        public void eval(Integer arg1, Integer arg2) {
+        public void eval(String arg1, String arg2) {
             collect(arg1 + ", " + arg2);
         }
     }

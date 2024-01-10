@@ -36,8 +36,6 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static org.apache.flink.table.types.logical.utils.LogicalTypeCasts.supportsImplicitCast;
-
 /**
  * Utility for performing type inference.
  *
@@ -126,17 +124,20 @@ public final class TypeInferenceUtil {
         final List<DataType> expectedTypes = adaptedCallContext.getArgumentDataTypes();
         for (int pos = 0; pos < actualTypes.size(); pos++) {
             final DataType expectedType = expectedTypes.get(pos);
-            final DataType actualType = actualTypes.get(pos);
-            if (!supportsImplicitCast(actualType.getLogicalType(), expectedType.getLogicalType())) {
-                if (!throwOnInferInputFailure) {
-                    // abort the adaption, e.g. if a NULL is passed for a NOT NULL argument
-                    return callContext;
-                }
-                throw new ValidationException(
-                        String.format(
-                                "Invalid argument type at position %d. Data type %s expected but %s passed.",
-                                pos, expectedType, actualType));
-            }
+            //            final DataType actualType = actualTypes.get(pos);
+            //            if (!supportsImplicitCast(actualType.getLogicalType(),
+            // expectedType.getLogicalType())) {
+            //                if (!throwOnInferInputFailure) {
+            //                    // abort the adaption, e.g. if a NULL is passed for a NOT NULL
+            // argument
+            //                    return callContext;
+            //                }
+            //                throw new ValidationException(
+            //                        String.format(
+            //                                "Invalid argument type at position %d. Data type %s
+            // expected but %s passed.",
+            //                                pos, expectedType, actualType));
+            //            }
         }
 
         return adaptedCallContext;

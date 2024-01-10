@@ -211,6 +211,7 @@ public final class TypeInferenceExtractor {
 
         configureNamedArguments(builder, outputMapping);
         configureTypedArguments(builder, outputMapping);
+        configureOptionalArguments(builder, outputMapping);
 
         builder.inputTypeStrategy(translateInputTypeStrategy(outputMapping));
 
@@ -265,15 +266,29 @@ public final class TypeInferenceExtractor {
         }
     }
 
+    private static void configureOptionalArguments(
+            TypeInference.Builder builder,
+            Map<FunctionSignatureTemplate, FunctionResultTemplate> outputMapping) {
+        if (outputMapping.size() != 1) {
+            return;
+        }
+        final FunctionSignatureTemplate signature = outputMapping.keySet().iterator().next();
+        builder.optionalArguments(signature.argumentOptions);
+    }
+
     private static TypeStrategy translateResultTypeStrategy(
             Map<FunctionSignatureTemplate, FunctionResultTemplate> resultMapping) {
-        final Map<InputTypeStrategy, TypeStrategy> mappings =
-                resultMapping.entrySet().stream()
-                        .collect(
-                                Collectors.toMap(
-                                        e -> e.getKey().toInputTypeStrategy(),
-                                        e -> e.getValue().toTypeStrategy()));
-        return TypeStrategies.mapping(mappings);
+        if (resultMapping.size() > 1) {
+            final Map<InputTypeStrategy, TypeStrategy> mappings =
+                    resultMapping.entrySet().stream()
+                            .collect(
+                                    Collectors.toMap(
+                                            e -> e.getKey().toInputTypeStrategy(),
+                                            e -> e.getValue().toTypeStrategy()));
+            return TypeStrategies.mapping(mappings);
+        } else {
+            return resultMapping.values().stream().findFirst().get().toTypeStrategy();
+        }
     }
 
     private static InputTypeStrategy translateInputTypeStrategy(

@@ -24,7 +24,9 @@ import org.apache.flink.table.catalog.DataTypeFactory;
 import org.apache.flink.table.functions.FunctionDefinition;
 import org.apache.flink.table.planner.calcite.FlinkTypeFactory;
 import org.apache.flink.table.types.DataType;
+import org.apache.flink.table.types.inference.ArgumentCount;
 import org.apache.flink.table.types.inference.CallContext;
+import org.apache.flink.table.types.inference.ConstantArgumentCount;
 import org.apache.flink.table.types.inference.TypeInference;
 import org.apache.flink.table.types.inference.TypeInferenceUtil;
 import org.apache.flink.table.types.logical.LogicalType;
@@ -44,8 +46,10 @@ import org.apache.calcite.sql.validate.SqlValidator;
 import org.apache.calcite.sql.validate.SqlValidatorNamespace;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.apache.flink.table.planner.calcite.FlinkTypeFactory.toLogicalType;
+import static org.apache.flink.table.planner.typeutils.LogicalRelDataTypeConverter.toRelDataType;
 import static org.apache.flink.table.planner.utils.ShortcutUtils.unwrapTypeFactory;
 import static org.apache.flink.table.types.inference.TypeInferenceUtil.adaptArguments;
 import static org.apache.flink.table.types.inference.TypeInferenceUtil.createInvalidCallException;
@@ -99,7 +103,9 @@ public final class TypeInferenceOperandChecker
 
     @Override
     public SqlOperandCountRange getOperandCountRange() {
-        return countRange;
+        ArgumentCount argumentCount = ConstantArgumentCount.between(0, countRange.getMax());
+
+        return new ArgumentCountRange(argumentCount);
     }
 
     @Override
@@ -114,12 +120,29 @@ public final class TypeInferenceOperandChecker
 
     @Override
     public boolean isOptional(int i) {
-        return false;
+        return typeInference
+                .getOptionalArguments()
+                .orElseThrow(
+                        () ->
+                                new ValidationException(
+                                        "Could not find the argument names. "
+                                                + "Currently named arguments are not supported "
+                                                + "for varArgs and multi different argument names "
+                                                + "with overload function"))
+                .get(i);
     }
 
     @Override
     public List<RelDataType> paramTypes(RelDataTypeFactory typeFactory) {
-        throw new IllegalStateException("Should not be called");
+        return typeInference.getTypedArguments().get().stream()
+                .map(t -> toRelDataType(t.getLogicalType(), typeFactory))
+                .collect(Collectors.toList());
+        //        throw new IllegalStateException("Should not be called");
+    }
+
+    @Override
+    public boolean isFixedParameters() {
+        return true;
     }
 
     @Override
@@ -139,6 +162,9 @@ public final class TypeInferenceOperandChecker
 
     private boolean checkOperandTypesOrError(SqlCallBinding callBinding, CallContext callContext) {
         final CallContext adaptedCallContext;
+        if (typeInference.getNamedArguments().get().size() != callBinding.getOperandCount()) {
+            return false;
+        }
         try {
             adaptedCallContext = adaptArguments(typeInference, callContext, null);
         } catch (ValidationException e) {

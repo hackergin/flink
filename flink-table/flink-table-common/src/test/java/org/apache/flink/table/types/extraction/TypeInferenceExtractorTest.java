@@ -165,6 +165,12 @@ class TypeInferenceExtractorTest {
                                         new String[0], new ArgumentTypeStrategy[0]),
                                 TypeStrategies.explicit(DataTypes.INT())),
 
+                // optional value
+                TestSpec.forScalarFunction(OptionalValueHintsFunction.class)
+                        .expectNamedArguments("n")
+                        .expectTypedArguments(DataTypes.INT())
+                        .expectTypedArguments(),
+
                 // test primitive arguments extraction
                 TestSpec.forScalarFunction(MixedArgFunction.class)
                         .expectNamedArguments("i", "d")
@@ -992,6 +998,22 @@ class TypeInferenceExtractorTest {
     private static class GlobalInputFunctionHints extends ScalarFunction {
         @FunctionHint(output = @DataTypeHint("INT"))
         public Integer eval(Number n) {
+            return null;
+        }
+    }
+
+    private static class OptionalValueHintsFunction extends ScalarFunction {
+        @FunctionHint(
+                output = @DataTypeHint(value = "INT", isOptional = false, defaultValueString = "1"),
+                argumentNames = {"n"})
+        public Integer eval(Integer n) {
+            return null;
+        }
+    }
+
+    private static class DefaultValueHints extends ScalarFunction {
+        @FunctionHint(output = @DataTypeHint("INT"))
+        public Integer eval(Integer n) {
             return null;
         }
     }

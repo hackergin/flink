@@ -70,6 +70,9 @@ final class DataTypeTemplate {
 
     final @Nullable Integer defaultSecondPrecision;
 
+    final @Nullable Boolean isOptional;
+    final @Nullable String defaultValueString;
+
     private DataTypeTemplate(
             @Nullable DataType dataType,
             @Nullable Class<? extends TypeSerializer<?>> rawSerializer,
@@ -81,7 +84,9 @@ final class DataTypeTemplate {
             @Nullable Integer defaultDecimalPrecision,
             @Nullable Integer defaultDecimalScale,
             @Nullable Integer defaultYearPrecision,
-            @Nullable Integer defaultSecondPrecision) {
+            @Nullable Integer defaultSecondPrecision,
+            @Nullable Boolean isOptional,
+            @Nullable String defaultValueString) {
         this.dataType = dataType;
         this.rawSerializer = rawSerializer;
         this.inputGroup = inputGroup;
@@ -93,6 +98,8 @@ final class DataTypeTemplate {
         this.defaultDecimalScale = defaultDecimalScale;
         this.defaultYearPrecision = defaultYearPrecision;
         this.defaultSecondPrecision = defaultSecondPrecision;
+        this.isOptional = isOptional;
+        this.defaultValueString = defaultValueString;
     }
 
     /**
@@ -130,13 +137,15 @@ final class DataTypeTemplate {
                 defaultAsNull(hint, DataTypeHint::defaultDecimalPrecision),
                 defaultAsNull(hint, DataTypeHint::defaultDecimalScale),
                 defaultAsNull(hint, DataTypeHint::defaultYearPrecision),
-                defaultAsNull(hint, DataTypeHint::defaultSecondPrecision));
+                defaultAsNull(hint, DataTypeHint::defaultSecondPrecision),
+                defaultAsNull(hint, DataTypeHint::isOptional),
+                defaultAsNull(hint, DataTypeHint::defaultValueString));
     }
 
     /** Creates an instance with no parameter content. */
     static DataTypeTemplate fromDefaults() {
         return new DataTypeTemplate(
-                null, null, null, null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null, null, null, null);
     }
 
     /** Copies this template but removes the explicit data type (if available). */
@@ -152,7 +161,9 @@ final class DataTypeTemplate {
                 defaultDecimalPrecision,
                 defaultDecimalScale,
                 defaultYearPrecision,
-                defaultSecondPrecision);
+                defaultSecondPrecision,
+                isOptional,
+                defaultValueString);
     }
 
     /**
@@ -172,7 +183,9 @@ final class DataTypeTemplate {
                 rightValueIfNotNull(defaultDecimalPrecision, otherTemplate.defaultDecimalPrecision),
                 rightValueIfNotNull(defaultDecimalScale, otherTemplate.defaultDecimalScale),
                 rightValueIfNotNull(defaultYearPrecision, otherTemplate.defaultYearPrecision),
-                rightValueIfNotNull(defaultSecondPrecision, otherTemplate.defaultSecondPrecision));
+                rightValueIfNotNull(defaultSecondPrecision, otherTemplate.defaultSecondPrecision),
+                rightValueIfNotNull(isOptional, otherTemplate.isOptional),
+                rightValueIfNotNull(defaultValueString, otherTemplate.defaultValueString));
     }
 
     /** Returns whether RAW types are allowed everywhere. */
