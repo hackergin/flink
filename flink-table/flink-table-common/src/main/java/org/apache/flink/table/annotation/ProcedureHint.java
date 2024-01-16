@@ -140,6 +140,17 @@ public @interface ProcedureHint {
     String[] argumentNames() default {""};
 
     /**
+     * Explicitly lists the argument that a procedure takes as input, including their names, types,
+     * and whether they are optional.
+     *
+     * <p>By default, argumentHint takes precedence over {@link #input()}. If the type of argument
+     * is not defined in this method, the type specified in {@link #input()} will be used instead.
+     * If {@link #input()} is also not defined, reflection-based extraction will be used and this
+     * parameter will be ignored.
+     */
+    ArgumentHint[] arguments() default @ArgumentHint;
+
+    /**
      * Explicitly defines the result type that a procedure uses as output.
      *
      * <p>By default, an explicit output type is undefined and the reflection-based extraction is
