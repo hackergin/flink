@@ -149,6 +149,18 @@ public @interface FunctionHint {
     String[] argumentNames() default {""};
 
     /**
+     * Explicitly lists the argument that a function takes as input, including their names, types,
+     * and whether they are optional.
+     *
+     * <p>By default, it is recommended to use this parameter instead of {@link #input()}. If the
+     * type of argumentHint is not defined, it will be considered an invalid argument and an
+     * exception will be thrown. Additionally, both this parameter and {@link #input()} cannot be
+     * defined at the same time. If neither arguments nor {@link #input()} are defined,
+     * reflection-based extraction will be used.
+     */
+    ArgumentHint[] arguments() default {};
+
+    /**
      * Explicitly defines the intermediate result type that a function uses as accumulator.
      *
      * <p>By default, an explicit accumulator type is undefined and the reflection-based extraction
