@@ -130,8 +130,12 @@ public class PlannerCallProcedureOperation implements CallProcedureOperation {
                 StreamExecutionEnvironment.getExecutionEnvironment(tableConfig.getConfiguration());
         argumentVal[0] = new DefaultProcedureContext(env);
         for (int i = 0; i < internalInputArguments.length; i++) {
-            argumentVal[i + 1] =
-                    toExternal(internalInputArguments[i], inputTypes[i], userClassLoader);
+            if (internalInputArguments[i] != null) {
+                argumentVal[i + 1] =
+                        toExternal(internalInputArguments[i], inputTypes[i], userClassLoader);
+            } else {
+                argumentVal[i + 1] = null;
+            }
         }
         return argumentVal;
     }

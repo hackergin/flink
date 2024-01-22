@@ -25,16 +25,19 @@ import org.apache.flink.table.planner.functions.bridging.BridgingSqlProcedure;
 import org.apache.flink.table.planner.functions.inference.OperatorBindingCallContext;
 import org.apache.flink.table.planner.operations.PlannerCallProcedureOperation;
 import org.apache.flink.table.planner.plan.utils.RexLiteralUtil;
-import org.apache.flink.table.planner.typeutils.LogicalRelDataTypeConverter;
 import org.apache.flink.table.procedures.ProcedureDefinition;
 import org.apache.flink.table.types.DataType;
+import org.apache.flink.table.types.inference.TypeInference;
 import org.apache.flink.table.types.inference.TypeInferenceUtil;
+import org.apache.flink.table.types.logical.LogicalType;
 
 import org.apache.calcite.rel.type.RelDataType;
+import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rex.RexLiteral;
 import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.sql.ExplicitOperatorBinding;
 import org.apache.calcite.sql.SqlCall;
+import org.apache.calcite.sql.SqlCallBinding;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.SqlOperatorBinding;
@@ -44,7 +47,8 @@ import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
+
+import static org.apache.flink.table.planner.typeutils.LogicalRelDataTypeConverter.toRelDataType;
 
 /**
  * A converter for call procedure node. The call procedure statement will be parsed to a SqlCall
@@ -67,13 +71,29 @@ public class SqlProcedureCallConverter implements SqlNodeConverter<SqlNode> {
         ProcedureDefinition procedureDefinition =
                 new ProcedureDefinition(sqlProcedure.getContextResolveProcedure().getProcedure());
 
+        TypeInference typeInference =
+                procedureDefinition.getTypeInference(
+                        context.getCatalogManager().getDataTypeFactory());
+        List<RexNode> reducedOperands = reduceOperands(callProcedure, context);
+        List<RelDataType> types = new ArrayList<>(reducedOperands.size());
+        for (int i = 0; i < reducedOperands.size(); i++) {
+            if (reducedOperands.get(i) != null) {
+                types.add(reducedOperands.get(i).getType());
+            } else {
+                if (typeInference.getTypedArguments().isPresent()) {
+                    RelDataTypeFactory relDataTypeFactory =
+                            context.getSqlValidator().getTypeFactory();
+                    LogicalType logicalType =
+                            typeInference.getTypedArguments().get().get(i).getLogicalType();
+                    types.add(toRelDataType(logicalType, relDataTypeFactory));
+                } else {
+                    throw new IllegalArgumentException("");
+                }
+            }
+        }
         SqlOperatorBinding sqlOperatorBinding =
                 new ExplicitOperatorBinding(
-                        context.getSqlValidator().getTypeFactory(),
-                        sqlProcedure,
-                        callProcedure.getOperandList().stream()
-                                .map(sqlValidator::getValidatedNodeType)
-                                .collect(Collectors.toList()));
+                        context.getSqlValidator().getTypeFactory(), sqlProcedure, types);
 
         OperatorBindingCallContext bindingCallContext =
                 new OperatorBindingCallContext(
@@ -90,8 +110,6 @@ public class SqlProcedureCallConverter implements SqlNodeConverter<SqlNode> {
                                 context.getCatalogManager().getDataTypeFactory()),
                         bindingCallContext,
                         null);
-
-        List<RexNode> reducedOperands = reduceOperands(callProcedure, context);
         List<DataType> argumentTypes = typeInferResult.getExpectedArgumentTypes();
         int argumentCount = argumentTypes.size();
         DataType[] inputTypes = new DataType[argumentCount];
@@ -99,7 +117,7 @@ public class SqlProcedureCallConverter implements SqlNodeConverter<SqlNode> {
         for (int i = 0; i < argumentCount; i++) {
             inputTypes[i] = argumentTypes.get(i);
             RexNode reducedOperand = reducedOperands.get(i);
-            if (!(reducedOperand instanceof RexLiteral)) {
+            if (reducedOperand != null && !(reducedOperand instanceof RexLiteral)) {
                 throw new ValidationException(
                         String.format(
                                 "The argument at position %s %s for calling procedure can't be converted to "
@@ -107,13 +125,17 @@ public class SqlProcedureCallConverter implements SqlNodeConverter<SqlNode> {
                                 i, context.toQuotedSqlString(callProcedure.operand(i))));
             }
 
-            // convert the literal to Flink internal representation
-            RexLiteral literalOperand = (RexLiteral) reducedOperand;
-            Object internalValue =
-                    RexLiteralUtil.toFlinkInternalValue(
-                            literalOperand.getValueAs(Comparable.class),
-                            inputTypes[i].getLogicalType());
-            params[i] = internalValue;
+            if (reducedOperand == null) {
+                params[i] = null;
+            } else {
+                // convert the literal to Flink internal representation
+                RexLiteral literalOperand = (RexLiteral) reducedOperand;
+                Object internalValue =
+                        RexLiteralUtil.toFlinkInternalValue(
+                                literalOperand.getValueAs(Comparable.class),
+                                inputTypes[i].getLogicalType());
+                params[i] = internalValue;
+            }
         }
         return new PlannerCallProcedureOperation(
                 sqlProcedure.getContextResolveProcedure().getIdentifier().getIdentifier().get(),
@@ -128,16 +150,23 @@ public class SqlProcedureCallConverter implements SqlNodeConverter<SqlNode> {
         // since call procedure shouldn't refer any inputs.
         // so, construct an empty row for it.
         RelDataType inputRowType =
-                LogicalRelDataTypeConverter.toRelDataType(
+                toRelDataType(
                         DataTypes.ROW().getLogicalType(),
                         context.getSqlValidator().getTypeFactory());
         List<RexNode> rexNodes = new ArrayList<>();
-        for (int i = 0; i < sqlCall.operandCount(); i++) {
-            RexNode rexNode =
-                    context.toRexNode(unwrapNamedArgs(sqlCall.operand(i)), inputRowType, null);
-            rexNodes.add(rexNode);
+        // apply optional arguments
+        SqlCallBinding sqlCallBinding =
+                new SqlCallBinding(context.getSqlValidator(), null, sqlCall);
+        sqlCallBinding.operands();
+        for (SqlNode sqlNode : sqlCallBinding.operands()) {
+            if (sqlNode.getKind() == SqlKind.DEFAULT) {
+                rexNodes.add(null);
+            } else {
+                RexNode rexNode = context.toRexNode(sqlNode, inputRowType, null);
+                rexNodes.add(rexNode);
+            }
         }
-        return context.reduceRexNodes(rexNodes);
+        return rexNodes;
     }
 
     private SqlNode unwrapNamedArgs(SqlNode sqlNode) {

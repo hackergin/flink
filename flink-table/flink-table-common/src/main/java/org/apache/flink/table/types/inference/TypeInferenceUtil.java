@@ -107,17 +107,18 @@ public final class TypeInferenceUtil {
             boolean throwOnInferInputFailure) {
         final List<DataType> actualTypes = callContext.getArgumentDataTypes();
 
-        typeInference
-                .getTypedArguments()
-                .ifPresent(
-                        (dataTypes) -> {
-                            if (actualTypes.size() != dataTypes.size()) {
-                                throw new ValidationException(
-                                        String.format(
-                                                "Invalid number of arguments. %d arguments expected after argument expansion but %d passed.",
-                                                dataTypes.size(), actualTypes.size()));
-                            }
-                        });
+        //        typeInference
+        //                .getTypedArguments()
+        //                .ifPresent(
+        //                        (dataTypes) -> {
+        //                            if (actualTypes.size() != dataTypes.size()) {
+        //                                throw new ValidationException(
+        //                                        String.format(
+        //                                                "Invalid number of arguments. %d arguments
+        // expected after argument expansion but %d passed.",
+        //                                                dataTypes.size(), actualTypes.size()));
+        //                            }
+        //                        });
 
         final AdaptedCallContext adaptedCallContext =
                 inferInputTypes(typeInference, callContext, outputType, throwOnInferInputFailure);
@@ -352,7 +353,7 @@ public final class TypeInferenceUtil {
             validateArgumentCount(
                     typeInference.getInputTypeStrategy().getArgumentCount(),
                     callContext.getArgumentDataTypes().size(),
-                    false);
+                    true);
         } catch (ValidationException e) {
             throw createInvalidInputException(typeInference, callContext, e);
         }

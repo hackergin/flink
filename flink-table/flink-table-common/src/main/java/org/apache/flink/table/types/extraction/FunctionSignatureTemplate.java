@@ -92,7 +92,13 @@ final class FunctionSignatureTemplate {
             if (argumentNames == null) {
                 strategy = InputTypeStrategies.sequence(argumentStrategies);
             } else {
-                strategy = InputTypeStrategies.sequence(argumentNames, argumentStrategies);
+                if (argumentOptionals != null) {
+                    strategy =
+                            InputTypeStrategies.optionalSequence(
+                                    argumentNames, argumentOptionals, argumentStrategies);
+                } else {
+                    strategy = InputTypeStrategies.sequence(argumentNames, argumentStrategies);
+                }
             }
         }
         return strategy;

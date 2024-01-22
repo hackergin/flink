@@ -34,6 +34,7 @@ import org.apache.flink.table.types.inference.strategies.ExplicitArgumentTypeStr
 import org.apache.flink.table.types.inference.strategies.FamilyArgumentTypeStrategy;
 import org.apache.flink.table.types.inference.strategies.ItemAtIndexArgumentTypeStrategy;
 import org.apache.flink.table.types.inference.strategies.LiteralArgumentTypeStrategy;
+import org.apache.flink.table.types.inference.strategies.OptionalSequenceTypeStrategy;
 import org.apache.flink.table.types.inference.strategies.OrArgumentTypeStrategy;
 import org.apache.flink.table.types.inference.strategies.OrInputTypeStrategy;
 import org.apache.flink.table.types.inference.strategies.OutputArgumentTypeStrategy;
@@ -99,6 +100,20 @@ public final class InputTypeStrategies {
     public static InputTypeStrategy sequence(
             List<String> argumentNames, List<ArgumentTypeStrategy> strategies) {
         return new SequenceInputTypeStrategy(strategies, argumentNames);
+    }
+
+    /**
+     * Strategy for a named function signature like {@code f(s STRING, n NUMERIC)} using a sequence
+     * of {@link ArgumentTypeStrategy}s.
+     */
+    public static InputTypeStrategy optionalSequence(
+            String[] argumentNames,
+            Boolean[] argumentOptionals,
+            ArgumentTypeStrategy[] strategies) {
+        return new OptionalSequenceTypeStrategy(
+                Arrays.asList(strategies),
+                Arrays.asList(argumentNames),
+                Arrays.asList(argumentOptionals));
     }
 
     /**

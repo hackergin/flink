@@ -1198,13 +1198,14 @@ public class FunctionITCase extends StreamingTestBase {
         TestCollectionTableFactory.initData(sourceData);
 
         tEnv().executeSql(
-                "CREATE TABLE SourceTable(ts TIMESTAMP(3), s1 STRING, s2 STRING, i1 INT, i2 INT, WATERMARK FOR ts AS ts - INTERVAL '1' SECOND) "
-                        + "WITH ('connector' = 'COLLECTION')");
+                        "CREATE TABLE SourceTable(ts TIMESTAMP(3), s1 STRING, s2 STRING, i1 INT, i2 INT, WATERMARK FOR ts AS ts - INTERVAL '1' SECOND) "
+                                + "WITH ('connector' = 'COLLECTION')");
         tEnv().executeSql(
-                "CREATE TABLE SinkTable(s1 STRING, s2 STRING) WITH ('connector' = 'COLLECTION')");
+                        "CREATE TABLE SinkTable(s1 STRING, s2 STRING) WITH ('connector' = 'COLLECTION')");
 
         tEnv().createTemporarySystemFunction(
-                "NamedArgumentAggregateFunctionWithOptionalArguments", NamedArgumentAggregateFunctionWithOptionalArguments.class);
+                        "NamedArgumentAggregateFunctionWithOptionalArguments",
+                        NamedArgumentAggregateFunctionWithOptionalArguments.class);
 
         tEnv().executeSql(
                         "INSERT INTO SinkTable "
@@ -1901,7 +1902,8 @@ public class FunctionITCase extends StreamingTestBase {
     }
 
     /** Function that aggregates strings and finds the longest string. */
-    public static class NamedArgumentAggregateFunctionWithOptionalArguments extends AggregateFunction<String, Row> {
+    public static class NamedArgumentAggregateFunctionWithOptionalArguments
+            extends AggregateFunction<String, Row> {
 
         @Override
         public Row createAccumulator() {
@@ -1911,8 +1913,9 @@ public class FunctionITCase extends StreamingTestBase {
         @FunctionHint(
                 output = @DataTypeHint("STRING"),
                 arguments = {
-                        @ArgumentHint(name = "in1", type = @DataTypeHint("STRING"), isOptional = true),
-                        @ArgumentHint(name = "in2", type = @DataTypeHint("STRING"), isOptional = true)},
+                    @ArgumentHint(name = "in1", type = @DataTypeHint("STRING"), isOptional = true),
+                    @ArgumentHint(name = "in2", type = @DataTypeHint("STRING"), isOptional = true)
+                },
                 accumulator = @DataTypeHint("ROW<longestString STRING>"))
         public void accumulate(Row acc, String arg1, String arg2) {
             if (arg1 == null || arg2 == null) {

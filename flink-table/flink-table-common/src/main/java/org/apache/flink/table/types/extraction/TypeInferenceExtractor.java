@@ -305,6 +305,15 @@ public final class TypeInferenceExtractor {
 
     private static TypeStrategy translateResultTypeStrategy(
             Map<FunctionSignatureTemplate, FunctionResultTemplate> resultMapping) {
+        if (resultMapping.size() == 1) {
+            FunctionSignatureTemplate signatureTemplate =
+                    resultMapping.keySet().stream().findFirst().get();
+            if (signatureTemplate.argumentOptionals != null
+                    && Arrays.stream(signatureTemplate.argumentOptionals)
+                            .anyMatch(Boolean::booleanValue)) {
+                return resultMapping.values().stream().findFirst().get().toTypeStrategy();
+            }
+        }
         final Map<InputTypeStrategy, TypeStrategy> mappings =
                 resultMapping.entrySet().stream()
                         .collect(

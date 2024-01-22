@@ -89,7 +89,8 @@ public class TestProcedureCatalogFactory implements CatalogFactory {
             PROCEDURE_MAP.put(
                     ObjectPath.fromString("system.named_args"), new NamedArgumentsProcedure());
             PROCEDURE_MAP.put(
-                    ObjectPath.fromString("system.named_args_optional"), new NamedArgumentsProcedureWithOptionalArguments());
+                    ObjectPath.fromString("system.named_args_optional"),
+                    new NamedArgumentsProcedureWithOptionalArguments());
         }
 
         public CatalogWithBuiltInProcedure(String name) {
@@ -204,8 +205,10 @@ public class TestProcedureCatalogFactory implements CatalogFactory {
 
         @ProcedureHint(
                 output = @DataTypeHint("STRING"),
-                arguments = {@ArgumentHint(type = @DataTypeHint("STRING"), name = "c", isOptional = true),
-                        @ArgumentHint(type = @DataTypeHint("INT"), name = "d", isOptional = true)})
+                arguments = {
+                    @ArgumentHint(type = @DataTypeHint("STRING"), name = "c", isOptional = true),
+                    @ArgumentHint(type = @DataTypeHint("INT"), name = "d", isOptional = true)
+                })
         public String[] call(ProcedureContext procedureContext, String arg1, Integer arg2) {
             return new String[] {arg1 + ", " + arg2};
         }

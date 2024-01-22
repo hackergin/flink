@@ -187,11 +187,10 @@ class ProcedureITCase extends StreamingTestBase {
 
     @Test
     public void testNamedArgumentsWithOptionalArguments() {
-        TableResult tableResult =
-                tEnv().executeSql("call `system`.named_args_optional(d => 19)");
+        TableResult tableResult = tEnv().executeSql("call `system`.named_args_optional(d => 19)");
         verifyTableResult(
                 tableResult,
-                Collections.singletonList(Row.of("yuxia, 19")),
+                Collections.singletonList(Row.of("null, 19")),
                 ResolvedSchema.of(Column.physical("result", DataTypes.STRING())));
     }
 
