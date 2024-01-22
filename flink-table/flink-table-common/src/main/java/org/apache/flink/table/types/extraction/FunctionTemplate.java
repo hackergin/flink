@@ -190,6 +190,7 @@ final class FunctionTemplate {
 
         String[] argumentHintNames;
         DataTypeHint[] argumentHintTypes;
+        Boolean[] argumentOptionals = null;
         if (argumentHints != null) {
             argumentHintNames =
                     Arrays.stream(argumentHints)
@@ -208,6 +209,11 @@ final class FunctionTemplate {
             if (argumentHintNames.length > 0) {
                 argumentNames = argumentHintNames;
             }
+
+            argumentOptionals =
+                    Arrays.stream(argumentHints)
+                            .map(ArgumentHint::isOptional)
+                            .toArray(Boolean[]::new);
         }
 
         if (inputs == null) {
@@ -219,7 +225,8 @@ final class FunctionTemplate {
                         .map(dataTypeHint -> createArgumentTemplate(typeFactory, dataTypeHint))
                         .collect(Collectors.toList()),
                 isVarArg,
-                argumentNames);
+                argumentNames,
+                argumentOptionals);
     }
 
     private static FunctionArgumentTemplate createArgumentTemplate(

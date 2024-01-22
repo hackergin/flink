@@ -338,7 +338,8 @@ abstract class BaseMappingExtractor {
 
             final String[] argumentNames = extractArgumentNames(method, offset);
 
-            return FunctionSignatureTemplate.of(parameterTypes, method.isVarArgs(), argumentNames);
+            return FunctionSignatureTemplate.of(
+                    parameterTypes, method.isVarArgs(), argumentNames, null);
         };
     }
 

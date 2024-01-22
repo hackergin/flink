@@ -352,7 +352,7 @@ public final class TypeInferenceUtil {
             validateArgumentCount(
                     typeInference.getInputTypeStrategy().getArgumentCount(),
                     callContext.getArgumentDataTypes().size(),
-                    true);
+                    false);
         } catch (ValidationException e) {
             throw createInvalidInputException(typeInference, callContext, e);
         }

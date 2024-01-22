@@ -43,25 +43,36 @@ final class FunctionSignatureTemplate {
 
     final @Nullable String[] argumentNames;
 
+    final @Nullable Boolean[] argumentOptionals;
+
     private FunctionSignatureTemplate(
             List<FunctionArgumentTemplate> argumentTemplates,
             boolean isVarArgs,
-            @Nullable String[] argumentNames) {
+            @Nullable String[] argumentNames,
+            @Nullable Boolean[] argumentOptionals) {
         this.argumentTemplates = argumentTemplates;
         this.isVarArgs = isVarArgs;
         this.argumentNames = argumentNames;
+        this.argumentOptionals = argumentOptionals;
     }
 
     static FunctionSignatureTemplate of(
             List<FunctionArgumentTemplate> argumentTemplates,
             boolean isVarArgs,
-            @Nullable String[] argumentNames) {
+            @Nullable String[] argumentNames,
+            @Nullable Boolean[] argumentOptionals) {
         if (argumentNames != null && argumentNames.length != argumentTemplates.size()) {
             throw extractionError(
                     "Mismatch between number of argument names '%s' and argument types '%s'.",
                     argumentNames.length, argumentTemplates.size());
         }
-        return new FunctionSignatureTemplate(argumentTemplates, isVarArgs, argumentNames);
+        if (argumentOptionals != null && argumentOptionals.length != argumentTemplates.size()) {
+            throw extractionError(
+                    "Mismatch between number of argument optionals '%s' and argument types '%s'.",
+                    argumentOptionals.length, argumentTemplates.size());
+        }
+        return new FunctionSignatureTemplate(
+                argumentTemplates, isVarArgs, argumentNames, argumentOptionals);
     }
 
     InputTypeStrategy toInputTypeStrategy() {

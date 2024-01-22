@@ -35,7 +35,7 @@ import org.apache.flink.table.planner.functions.bridging.BridgingSqlFunction
 import org.apache.flink.table.planner.functions.sql.FlinkSqlOperatorTable._
 import org.apache.flink.table.planner.functions.sql.SqlThrowExceptionFunction
 import org.apache.flink.table.planner.functions.utils.{ScalarSqlFunction, TableSqlFunction}
-import org.apache.flink.table.planner.plan.utils.RexLiteralUtil
+import org.apache.flink.table.planner.plan.utils.{FlinkRexUtil, RexLiteralUtil}
 import org.apache.flink.table.runtime.types.LogicalTypeDataTypeConverter.fromLogicalTypeToDataType
 import org.apache.flink.table.runtime.types.PlannerTypeUtils.isInteroperable
 import org.apache.flink.table.runtime.typeutils.TypeCheckUtils
@@ -46,6 +46,8 @@ import org.apache.flink.table.typeutils.TimeIndicatorTypeInfo
 import org.apache.calcite.rex._
 import org.apache.calcite.sql.`type`.{ReturnTypes, SqlTypeName}
 import org.apache.calcite.sql.{SqlKind, SqlOperator}
+
+import java.util
 
 import scala.collection.JavaConversions._
 
@@ -465,8 +467,11 @@ class ExprCodeGenerator(ctx: CodeGeneratorContext, nullableInput: Boolean)
         call.getOperands.get(1).asInstanceOf[RexLiteral])
     }
 
+    // replace default node with right type.
+    val operands = new util.ArrayList[RexNode](call.operands)
+
     // convert operands and help giving untyped NULL literals a type
-    val operands = call.getOperands.zipWithIndex.map {
+    val expressions = call.getOperands.zipWithIndex.map {
 
       // this helps e.g. for AS(null)
       // we might need to extend this logic in case some rules do not create typed NULLs
@@ -474,11 +479,26 @@ class ExprCodeGenerator(ctx: CodeGeneratorContext, nullableInput: Boolean)
           if operandLiteral.getType.getSqlTypeName == SqlTypeName.NULL &&
             call.getOperator.getReturnTypeInference == ReturnTypes.ARG0 =>
         generateNullLiteral(resultType)
-
+      case (rexCall: RexCall, i)
+          if (rexCall.getKind == SqlKind.DEFAULT && call.getOperator
+            .isInstanceOf[BridgingSqlFunction]) => {
+        val sqlFunction = call.getOperator.asInstanceOf[BridgingSqlFunction]
+        val typeInference = sqlFunction.getTypeInference
+        val typeFactory = sqlFunction.getTypeFactory
+        if (typeInference.getTypedArguments.isPresent) {
+          val dataType = typeInference.getTypedArguments.get().get(i).getLogicalType
+          operands.set(
+            i,
+            rexCall.clone(typeFactory.createFieldTypeFromLogicalType(dataType), rexCall.operands))
+          generateNullLiteral(dataType)
+        } else {
+          call.accept(this)
+        }
+      }
       case (o @ _, _) => o.accept(this)
     }
 
-    generateCallExpression(ctx, call, operands, resultType)
+    generateCallExpression(ctx, call.clone(call.getType, operands), expressions, resultType)
   }
 
   override def visitOver(over: RexOver): GeneratedExpression =
