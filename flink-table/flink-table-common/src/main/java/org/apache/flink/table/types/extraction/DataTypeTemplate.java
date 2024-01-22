@@ -20,6 +20,7 @@ package org.apache.flink.table.types.extraction;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
+import org.apache.flink.table.annotation.ArgumentHint;
 import org.apache.flink.table.annotation.DataTypeHint;
 import org.apache.flink.table.annotation.ExtractionVersion;
 import org.apache.flink.table.annotation.HintFlag;
@@ -118,6 +119,22 @@ final class DataTypeTemplate {
      * Creates an instance from the given {@link DataTypeHint} with a resolved data type if
      * available.
      */
+    static DataTypeTemplate fromAnnotation(ArgumentHint argumentHint, @Nullable DataType dataType) {
+        DataTypeHint hint = argumentHint.type();
+        return new DataTypeTemplate(
+                dataType,
+                defaultAsNull(hint, DataTypeHint::rawSerializer),
+                defaultAsNull(hint, DataTypeHint::inputGroup),
+                defaultAsNull(hint, DataTypeHint::version),
+                hintFlagToBoolean(defaultAsNull(hint, DataTypeHint::allowRawGlobally)),
+                defaultAsNull(hint, DataTypeHint::allowRawPattern),
+                defaultAsNull(hint, DataTypeHint::forceRawPattern),
+                defaultAsNull(hint, DataTypeHint::defaultDecimalPrecision),
+                defaultAsNull(hint, DataTypeHint::defaultDecimalScale),
+                defaultAsNull(hint, DataTypeHint::defaultYearPrecision),
+                defaultAsNull(hint, DataTypeHint::defaultSecondPrecision));
+    }
+
     static DataTypeTemplate fromAnnotation(DataTypeHint hint, @Nullable DataType dataType) {
         return new DataTypeTemplate(
                 dataType,

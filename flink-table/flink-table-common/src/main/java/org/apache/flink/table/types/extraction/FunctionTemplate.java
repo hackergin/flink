@@ -19,6 +19,7 @@
 package org.apache.flink.table.types.extraction;
 
 import org.apache.flink.annotation.Internal;
+import org.apache.flink.table.annotation.ArgumentHint;
 import org.apache.flink.table.annotation.DataTypeHint;
 import org.apache.flink.table.annotation.FunctionHint;
 import org.apache.flink.table.annotation.ProcedureHint;
@@ -63,11 +64,13 @@ final class FunctionTemplate {
      * types.
      */
     static FunctionTemplate fromAnnotation(DataTypeFactory typeFactory, FunctionHint hint) {
+
         return new FunctionTemplate(
                 createSignatureTemplate(
                         typeFactory,
                         defaultAsNull(hint, FunctionHint::input),
                         defaultAsNull(hint, FunctionHint::argumentNames),
+                        defaultAsNull(hint, FunctionHint::arguments),
                         hint.isVarArgs()),
                 createResultTemplate(typeFactory, defaultAsNull(hint, FunctionHint::accumulator)),
                 createResultTemplate(typeFactory, defaultAsNull(hint, FunctionHint::output)));
@@ -78,11 +81,13 @@ final class FunctionTemplate {
      * data types.
      */
     static FunctionTemplate fromAnnotation(DataTypeFactory typeFactory, ProcedureHint hint) {
+
         return new FunctionTemplate(
                 createSignatureTemplate(
                         typeFactory,
                         defaultAsNull(hint, ProcedureHint::input),
                         defaultAsNull(hint, ProcedureHint::argumentNames),
+                        defaultAsNull(hint, ProcedureHint::arguments),
                         hint.isVarArgs()),
                 null,
                 createResultTemplate(typeFactory, defaultAsNull(hint, ProcedureHint::output)));
@@ -145,6 +150,7 @@ final class FunctionTemplate {
 
     @ProcedureHint
     @FunctionHint
+    @ArgumentHint
     private static class DefaultAnnotationHelper {
         // no implementation
     }
@@ -161,6 +167,10 @@ final class FunctionTemplate {
         return defaultAsNull(hint, getDefaultAnnotation(ProcedureHint.class), accessor);
     }
 
+    private static <T> T defaultAsNull(ArgumentHint hint, Function<ArgumentHint, T> accessor) {
+        return defaultAsNull(hint, getDefaultAnnotation(ArgumentHint.class), accessor);
+    }
+
     private static <T, H extends Annotation> T defaultAsNull(
             H hint, H defaultHint, Function<H, T> accessor) {
         final T defaultValue = accessor.apply(defaultHint);
@@ -173,14 +183,39 @@ final class FunctionTemplate {
 
     private static @Nullable FunctionSignatureTemplate createSignatureTemplate(
             DataTypeFactory typeFactory,
-            @Nullable DataTypeHint[] input,
+            @Nullable DataTypeHint[] inputs,
             @Nullable String[] argumentNames,
+            @Nullable ArgumentHint[] argumentHints,
             boolean isVarArg) {
-        if (input == null) {
+
+        String[] argumentHintNames;
+        DataTypeHint[] argumentHintTypes;
+        if (argumentHints != null) {
+            argumentHintNames =
+                    Arrays.stream(argumentHints)
+                            .map(argumentHint -> defaultAsNull(argumentHint, ArgumentHint::name))
+                            .filter(Objects::nonNull)
+                            .toArray(String[]::new);
+            argumentHintTypes =
+                    Arrays.stream(argumentHints)
+                            .map(argumentHint -> defaultAsNull(argumentHint, ArgumentHint::type))
+                            .filter(Objects::nonNull)
+                            .toArray(DataTypeHint[]::new);
+
+            if (argumentHintTypes.length > 0) {
+                inputs = argumentHintTypes;
+            }
+            if (argumentHintNames.length > 0) {
+                argumentNames = argumentHintNames;
+            }
+        }
+
+        if (inputs == null) {
             return null;
         }
+
         return FunctionSignatureTemplate.of(
-                Arrays.stream(input)
+                Arrays.stream(inputs)
                         .map(dataTypeHint -> createArgumentTemplate(typeFactory, dataTypeHint))
                         .collect(Collectors.toList()),
                 isVarArg,
