@@ -236,12 +236,13 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
  * <p>FLINK modifications are at lines
  *
  * <ol>
- *   <li>Added in FLINK-29081, FLINK-28682, FLINK-33395: Lines 654 ~ 671
- *   <li>Added in FLINK-28682: Lines 2294 ~ 2311
- *   <li>Added in FLINK-28682: Lines 2348 ~ 2376
- *   <li>Added in FLINK-20873: Lines 5489 ~ 5498
- *   <li>Added in FLINK-32474: Lines 2846 ~ 2858
- *   <li>Added in FLINK-32474: Lines 2958 ~ 2992
+ *   <li>Added in FLINK-29081, FLINK-28682, FLINK-33395: Lines 655 ~ 672
+ *   <li>Added in FLINK-28682: Lines 2295 ~ 2312
+ *   <li>Added in FLINK-28682: Lines 2349 ~ 2377
+ *   <li>Added in FLINK-20873: Lines 5490 ~ 5499
+ *   <li>Added in FLINK-32474: Lines 2847 ~ 2859
+ *   <li>Added in FLINK-32474: Lines 2959 ~ 2993
+ *   <li>Added in FLINK-34057: Lines 6060 ~ 6063
  * </ol>
  */
 @SuppressWarnings("UnstableApiUsage")
@@ -6056,8 +6057,11 @@ public class SqlToRelConverter {
             try {
                 // switch out of agg mode
                 bb.agg = null;
-                for (SqlNode operand : call.getOperandList()) {
-
+                // ----- FLINK MODIFICATION BEGIN -----
+                for (SqlNode operand :
+                        new SqlCallBinding(validator(), aggregatingSelectScope, call).operands())
+                // ----- FLINK MODIFICATION END -----
+                {
                     // special case for COUNT(*):  delete the *
                     if (operand instanceof SqlIdentifier) {
                         SqlIdentifier id = (SqlIdentifier) operand;
