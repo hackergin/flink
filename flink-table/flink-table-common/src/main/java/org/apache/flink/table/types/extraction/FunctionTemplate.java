@@ -193,20 +193,22 @@ final class FunctionTemplate {
 
         if (argumentHints != null && inputs != null) {
             throw extractionError(
-                    "Unable to support specifying both inputs and arguments at the same time.");
+                    "Argument and input hints cannot be declared in the same function hint.");
         }
 
         if (argumentHints != null) {
-            argumentHintNames =
-                    Arrays.stream(argumentHints)
-                            .map(argumentHint -> defaultAsNull(argumentHint, ArgumentHint::name))
-                            .filter(Objects::nonNull)
-                            .toArray(String[]::new);
-            argumentHintTypes =
-                    Arrays.stream(argumentHints)
-                            .map(argumentHint -> defaultAsNull(argumentHint, ArgumentHint::type))
-                            .filter(Objects::nonNull)
-                            .toArray(DataTypeHint[]::new);
+            argumentHintNames = new String[argumentHints.length];
+            argumentHintTypes = new DataTypeHint[argumentHints.length];
+            for (int i = 0; i < argumentHints.length; i++) {
+                ArgumentHint argumentHint = argumentHints[i];
+                argumentHintNames[i] = defaultAsNull(argumentHint, ArgumentHint::name);
+                argumentHintTypes[i] = defaultAsNull(argumentHint, ArgumentHint::type);
+                if (argumentHintNames[i] == null || argumentHintTypes[i] == null) {
+                    throw extractionError(
+                            "Argument at position %d, type or name is not set, both of them must be set.",
+                            i);
+                }
+            }
         } else {
             argumentHintTypes = inputs;
             argumentHintNames = argumentNames;

@@ -366,7 +366,8 @@ abstract class BaseMappingExtractor {
         final ArgumentHint argumentHint = parameter.getAnnotation(ArgumentHint.class);
         if (hint != null && argumentHint != null) {
             throw extractionError(
-                    "ArgumentHint and DataTypeHint cannot be declared at the same time.");
+                    "Argument and dataType hints cannot be declared in the same parameter at position %d.",
+                    paramPos);
         }
         if (argumentHint != null) {
             final DataTypeTemplate template = DataTypeTemplate.fromAnnotation(argumentHint, null);
