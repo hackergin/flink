@@ -151,7 +151,12 @@ class GroupAggregateHarnessTest(mode: StateBackendMode, miniBatch: MiniBatchMode
     expectedOutput.add(binaryRecord(UPDATE_BEFORE, "bbb", 2L: JLong))
     expectedOutput.add(binaryRecord(UPDATE_AFTER, "bbb", 5L: JLong))
 
+    // accumulate
+
     val result = testHarness.getOutput
+    testHarness.processElement(binaryRecord(INSERT, "aaa", 0L: JLong))
+    expectedOutput.add(binaryRecord(UPDATE_BEFORE, "aaa", 16L: JLong))
+    expectedOutput.add(binaryRecord(UPDATE_AFTER, "aaa", 16L: JLong))
 
     assertor.assertOutputEqualsSorted("result mismatch", expectedOutput, result)
 
@@ -218,6 +223,49 @@ class GroupAggregateHarnessTest(mode: StateBackendMode, miniBatch: MiniBatchMode
     assertor.assertOutputEqualsSorted("result mismatch", expectedOutput, result)
 
     testHarness.close()
+  }
+
+  @TestTemplate
+  def testGlobalAggregateWithRetraction(): Unit = {
+    if (!this.miniBatch.on) {
+      return
+    }
+    val data = new mutable.MutableList[(String, String, Long)]
+    val t = env.fromCollection(data).toTable(tEnv, 'a, 'b, 'c)
+    tEnv.createTemporaryView("T", t)
+
+    val sql =
+      """
+        |SELECT a, SUM(c)
+        |FROM (
+        |  SELECT a, b, SUM(c) as c
+        |  FROM T GROUP BY a, b
+        |)GROUP BY a
+      """.stripMargin
+    val t1 = tEnv.sqlQuery(sql)
+
+    tEnv.getConfig.setIdleStateRetention(Duration.ofSeconds(2))
+    tEnv.getConfig.set("table.optimizer.agg-phase-strategy", "TWO_PHASE")
+    val testHarness = createHarnessTester(t1.toRetractStream[Row], "LocalGroupAggregate")
+    val assertor = new RowDataHarnessAssertor(
+      Array(DataTypes.STRING().getLogicalType, DataTypes.BIGINT().getLogicalType))
+
+    testHarness.open()
+
+    val expectedOutput = new ConcurrentLinkedQueue[Object]()
+
+    // set TtlTimeProvider with 1
+    testHarness.setStateTtlProcessingTime(1)
+
+    // insertion
+    testHarness.processElement(binaryRecord(INSERT, "aaa", 1L: JLong))
+    expectedOutput.add(binaryRecord(INSERT, "aaa", 1L: JLong))
+
+    // insertion
+    testHarness.processElement(binaryRecord(INSERT, "bbb", 1L: JLong))
+    expectedOutput.add(binaryRecord(INSERT, "bbb", 1L: JLong))
+
+
   }
 
   private def createAggregationWithDistinct()
