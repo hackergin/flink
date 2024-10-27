@@ -19,6 +19,7 @@
 package org.apache.flink.yarn;
 
 import org.apache.flink.annotation.Internal;
+import org.apache.flink.api.common.ClusterInfo;
 import org.apache.flink.client.deployment.AbstractContainerizedClusterClientFactory;
 import org.apache.flink.client.deployment.ClusterClientFactory;
 import org.apache.flink.configuration.Configuration;
@@ -71,6 +72,11 @@ public class YarnClusterClientFactory
     @Override
     public Optional<String> getApplicationTargetName() {
         return Optional.of(YarnDeploymentTarget.APPLICATION.getName());
+    }
+
+    @Override
+    public ClusterInfo getClusterInfo(ApplicationId clusterID) {
+        return ClusterInfo.of(YarnConfigOptions.APPLICATION_ID.key(), clusterID.toString());
     }
 
     private YarnClusterDescriptor getClusterDescriptor(Configuration configuration) {

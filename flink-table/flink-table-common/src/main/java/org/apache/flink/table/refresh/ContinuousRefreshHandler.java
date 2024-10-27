@@ -23,6 +23,7 @@ import org.apache.flink.annotation.Internal;
 import javax.annotation.Nullable;
 
 import java.io.Serializable;
+import java.util.Map;
 import java.util.Optional;
 
 /** Embedded continuous refresh handler of Flink streaming job for materialized table. */
@@ -31,21 +32,28 @@ public class ContinuousRefreshHandler implements RefreshHandler, Serializable {
 
     private static final long serialVersionUID = 1L;
 
-    // TODO: add clusterId for yarn and k8s resource manager
     private final String executionTarget;
+    private final Map<String, String> clusterConfig;
     private final String jobId;
 
     private @Nullable final String restorePath;
 
-    public ContinuousRefreshHandler(String executionTarget, String jobId) {
+    public ContinuousRefreshHandler(
+            String executionTarget, String jobId, Map<String, String> clusterConfig) {
         this.executionTarget = executionTarget;
         this.jobId = jobId;
+        this.clusterConfig = clusterConfig;
         this.restorePath = null;
     }
 
-    public ContinuousRefreshHandler(String executionTarget, String jobId, String restorePath) {
+    public ContinuousRefreshHandler(
+            String executionTarget,
+            String jobId,
+            Map<String, String> clusterConfig,
+            String restorePath) {
         this.executionTarget = executionTarget;
         this.jobId = jobId;
+        this.clusterConfig = clusterConfig;
         this.restorePath = restorePath;
     }
 
@@ -55,6 +63,10 @@ public class ContinuousRefreshHandler implements RefreshHandler, Serializable {
 
     public String getJobId() {
         return jobId;
+    }
+
+    public Map<String, String> getClusterConfig() {
+        return clusterConfig;
     }
 
     public Optional<String> getRestorePath() {

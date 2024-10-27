@@ -19,21 +19,28 @@
 package org.apache.flink.table.gateway.service.operation;
 
 import org.apache.flink.annotation.VisibleForTesting;
+import org.apache.flink.api.common.ClusterInfo;
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.client.cli.ClientOptions;
 import org.apache.flink.client.deployment.ClusterClientFactory;
 import org.apache.flink.client.deployment.ClusterClientServiceLoader;
 import org.apache.flink.client.deployment.ClusterDescriptor;
+import org.apache.flink.client.deployment.ClusterSpecification;
 import org.apache.flink.client.deployment.DefaultClusterClientServiceLoader;
+import org.apache.flink.client.deployment.application.ApplicationConfiguration;
 import org.apache.flink.client.program.ClusterClient;
+import org.apache.flink.client.program.ClusterClientProvider;
+import org.apache.flink.client.table.SqlGatewayDriver;
 import org.apache.flink.configuration.CheckpointingOptions;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.execution.SavepointFormatType;
 import org.apache.flink.runtime.client.JobStatusMessage;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.table.api.CatalogNotExistException;
+import org.apache.flink.table.api.CompiledPlan;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.EnvironmentSettings;
+import org.apache.flink.table.api.ResultKind;
 import org.apache.flink.table.api.TableConfig;
 import org.apache.flink.table.api.TableException;
 import org.apache.flink.table.api.bridge.java.internal.StreamTableEnvironmentImpl;
@@ -50,6 +57,7 @@ import org.apache.flink.table.catalog.ObjectIdentifier;
 import org.apache.flink.table.catalog.ResolvedCatalogBaseTable;
 import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.catalog.UnresolvedIdentifier;
+import org.apache.flink.table.data.GenericMapData;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
@@ -117,14 +125,20 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static org.apache.flink.api.common.RuntimeExecutionMode.STREAMING;
+import static org.apache.flink.client.deployment.application.ApplicationConfiguration.APPLICATION_MAIN_CLASS;
+import static org.apache.flink.client.table.SqlGatewayDriverConfiguration.SQL_APPLICATION_JSON_PLAN;
+import static org.apache.flink.configuration.DeploymentOptions.TARGET;
 import static org.apache.flink.configuration.ExecutionOptions.RUNTIME_MODE;
+import static org.apache.flink.configuration.PipelineOptionsInternal.PIPELINE_FIXED_JOB_ID;
 import static org.apache.flink.table.api.internal.TableResultInternal.TABLE_RESULT_OK;
+import static org.apache.flink.table.gateway.service.utils.Constants.CLUSTER_INFO;
 import static org.apache.flink.table.gateway.service.utils.Constants.COMPLETION_CANDIDATES;
 import static org.apache.flink.table.gateway.service.utils.Constants.JOB_ID;
 import static org.apache.flink.table.gateway.service.utils.Constants.JOB_NAME;
@@ -637,18 +651,97 @@ public class OperationExecutor {
         }
     }
 
+    private <ClusterID> ResultFetcher deployApplication(
+            TableEnvironmentInternal tableEnv,
+            OperationHandle handle,
+            List<ModifyOperation> modifyOperations)
+            throws Exception {
+        // execution application mode
+        Configuration appConfiguration = new Configuration(sessionContext.getSessionConf());
+
+        // generate json plan
+        CompiledPlan plan = tableEnv.compilePlan(modifyOperations);
+        JobID jobID = JobID.generate();
+        appConfiguration.set(SQL_APPLICATION_JSON_PLAN, plan.asJsonString());
+        appConfiguration.set(APPLICATION_MAIN_CLASS, SqlGatewayDriver.class.getName());
+        appConfiguration.set(PIPELINE_FIXED_JOB_ID, jobID.toHexString());
+
+        ApplicationConfiguration applicationConfiguration =
+                ApplicationConfiguration.fromConfiguration(appConfiguration);
+        ClusterClientServiceLoader clientServiceLoader = new DefaultClusterClientServiceLoader();
+        final ClusterClientFactory<ClusterID> clientFactory =
+                clientServiceLoader.getClusterClientFactory(appConfiguration);
+        try (final ClusterDescriptor<ClusterID> clusterDescriptor =
+                clientFactory.createClusterDescriptor(appConfiguration)) {
+            final ClusterSpecification clusterSpecification =
+                    clientFactory.getClusterSpecification(appConfiguration);
+
+            ClusterClientProvider<ClusterID> clusterClientProvider =
+                    clusterDescriptor.deployApplicationCluster(
+                            clusterSpecification, applicationConfiguration);
+            ClusterID clusterID = clusterClientProvider.getClusterClient().getClusterId();
+            ClusterInfo clusterInfo = clientFactory.getClusterInfo(clusterID);
+
+            Map<StringData, StringData> clusterInfoMapData = new HashMap<>();
+            if (clusterInfo != null) {
+                clusterInfo
+                        .getOptions()
+                        .forEach(
+                                (key, value) ->
+                                        clusterInfoMapData.put(
+                                                StringData.fromString(key),
+                                                StringData.fromString(value)));
+            }
+
+            return ResultFetcher.fromResults(
+                    handle,
+                    ResolvedSchema.of(
+                            Column.physical(JOB_ID, DataTypes.STRING()),
+                            Column.physical(
+                                    CLUSTER_INFO,
+                                    DataTypes.MAP(DataTypes.STRING(), DataTypes.STRING()))),
+                    Collections.singletonList(
+                            GenericRowData.of(
+                                    StringData.fromString(jobID.toString()),
+                                    new GenericMapData(clusterInfoMapData))),
+                    jobID,
+                    ResultKind.SUCCESS_WITH_CONTENT);
+        }
+    }
+
     private ResultFetcher callModifyOperations(
             TableEnvironmentInternal tableEnv,
             OperationHandle handle,
             List<ModifyOperation> modifyOperations) {
-        TableResultInternal result = tableEnv.executeInternal(modifyOperations);
-        // DeleteFromFilterOperation doesn't have a JobClient
-        if (modifyOperations.size() == 1
-                && modifyOperations.get(0) instanceof DeleteFromFilterOperation) {
-            return ResultFetcher.fromTableResult(handle, result, false);
-        }
 
-        return fetchJobId(result, handle);
+        // execution application mode
+        if (isDeploymentTargetApplication(sessionContext)) {
+            try {
+                return deployApplication(tableEnv, handle, modifyOperations);
+            } catch (Exception e) {
+                throw new SqlExecutionException(
+                        "Failed to deploy application for modify operation.", e);
+            }
+        } else {
+            TableResultInternal result = tableEnv.executeInternal(modifyOperations);
+            // DeleteFromFilterOperation doesn't have a JobClient
+            if (modifyOperations.size() == 1
+                    && modifyOperations.get(0) instanceof DeleteFromFilterOperation) {
+                return ResultFetcher.fromTableResult(handle, result, false);
+            }
+
+            return fetchJobId(result, handle);
+        }
+    }
+
+    private <ClusterID> boolean isDeploymentTargetApplication(SessionContext sessionContext) {
+        Configuration sessionConfiguration = sessionContext.getSessionConf();
+        String target = sessionConfiguration.get(TARGET);
+        ClusterClientFactory<ClusterID> clusterClientFactory =
+                new DefaultClusterClientServiceLoader()
+                        .getClusterClientFactory(sessionContext.getSessionConf());
+
+        return Objects.equals(clusterClientFactory.getApplicationTargetName().orElse(null), target);
     }
 
     private ResultFetcher callExecuteOperation(
@@ -668,11 +761,34 @@ public class OperationExecutor {
                                                         "Can't get job client for the operation %s.",
                                                         handle)))
                         .getJobID();
+
+        Map<StringData, StringData> clusterInfoMapData = new HashMap<>();
+        // get cluster id options from cluster client
+        result.getJobClient()
+                .get()
+                .getClusterInfo()
+                .getOptions()
+                .forEach(
+                        (k, v) ->
+                                clusterInfoMapData.put(
+                                        StringData.fromString(k), StringData.fromString(v)));
+
+        // put execution target
+        clusterInfoMapData.put(
+                StringData.fromString(TARGET.key()),
+                StringData.fromString(sessionContext.getSessionConf().get(TARGET)));
+
         return ResultFetcher.fromResults(
                 handle,
-                ResolvedSchema.of(Column.physical(JOB_ID, DataTypes.STRING())),
+                ResolvedSchema.of(
+                        Column.physical(JOB_ID, DataTypes.STRING()),
+                        Column.physical(
+                                CLUSTER_INFO,
+                                DataTypes.MAP(DataTypes.STRING(), DataTypes.STRING()))),
                 Collections.singletonList(
-                        GenericRowData.of(StringData.fromString(jobID.toString()))),
+                        GenericRowData.of(
+                                StringData.fromString(jobID.toString()),
+                                new GenericMapData(clusterInfoMapData))),
                 jobID,
                 result.getResultKind());
     }
@@ -902,13 +1018,13 @@ public class OperationExecutor {
         final ClusterClientFactory<ClusterID> clusterClientFactory =
                 clusterClientServiceLoader.getClusterClientFactory(configuration);
 
-        final ClusterID clusterId = clusterClientFactory.getClusterId(configuration);
-        Preconditions.checkNotNull(clusterId, "No cluster ID found for operation " + handle);
-
-        try (final ClusterDescriptor<ClusterID> clusterDescriptor =
-                        clusterClientFactory.createClusterDescriptor(configuration);
-                final ClusterClient<ClusterID> clusterClient =
-                        clusterDescriptor.retrieve(clusterId).getClusterClient()) {
+        final ClusterDescriptor<ClusterID> clusterDescriptor =
+                clusterClientFactory.createClusterDescriptor(configuration);
+        try {
+            ClusterID clusterId = clusterClientFactory.getClusterId(configuration);
+            Preconditions.checkNotNull(clusterId, "No cluster ID found for operation " + handle);
+            final ClusterClient<ClusterID> clusterClient =
+                    clusterDescriptor.retrieve(clusterId).getClusterClient();
             return clusterAction.runAction(clusterClient);
         } catch (FlinkException e) {
             throw new SqlExecutionException("Failed to run cluster action.", e);

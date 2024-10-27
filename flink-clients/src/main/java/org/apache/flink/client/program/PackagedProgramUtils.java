@@ -59,6 +59,9 @@ public enum PackagedProgramUtils {
     private static final String PYTHON_DRIVER_CLASS_NAME =
             "org.apache.flink.client.python.PythonDriver";
 
+    private static final String SQL_DRIVER_CLASS_NAME =
+            "org.apache.flink.client.table.SqlGatewayDriver";
+
     /**
      * Creates a {@link JobGraph} with a specified {@link JobID} from the given {@link
      * PackagedProgram}.
@@ -184,6 +187,10 @@ public enum PackagedProgramUtils {
         return (entryPointClassName != null)
                 && (entryPointClassName.equals(PYTHON_DRIVER_CLASS_NAME)
                         || entryPointClassName.equals(PYTHON_GATEWAY_CLASS_NAME));
+    }
+
+    public static Boolean isSql(String entryPointClassName) {
+        return (entryPointClassName != null) && (entryPointClassName.equals(SQL_DRIVER_CLASS_NAME));
     }
 
     public static boolean isPython(String[] programArguments) {

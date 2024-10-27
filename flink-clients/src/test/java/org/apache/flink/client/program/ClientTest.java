@@ -506,7 +506,7 @@ class ClientTest {
                         final JobID jobID = clusterClient.submitJob(jobGraph).get();
                         return CompletableFuture.completedFuture(
                                 new ClusterClientJobClientAdapter<>(
-                                        () -> clusterClient, jobID, classLoader));
+                                        () -> clusterClient, jobID, classLoader, null));
                     };
                 }
             };

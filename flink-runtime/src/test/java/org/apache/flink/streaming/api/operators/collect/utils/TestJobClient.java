@@ -18,6 +18,7 @@
 
 package org.apache.flink.streaming.api.operators.collect.utils;
 
+import org.apache.flink.api.common.ClusterInfo;
 import org.apache.flink.api.common.JobExecutionResult;
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.JobStatus;
@@ -65,6 +66,11 @@ public class TestJobClient implements JobClient, CoordinationRequestGateway {
     @Override
     public JobID getJobID() {
         return jobId;
+    }
+
+    @Override
+    public ClusterInfo getClusterInfo() {
+        return ClusterInfo.empty();
     }
 
     @Override

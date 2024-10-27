@@ -19,6 +19,7 @@
 package org.apache.flink.client.deployment;
 
 import org.apache.flink.annotation.Internal;
+import org.apache.flink.api.common.ClusterInfo;
 import org.apache.flink.configuration.Configuration;
 
 import javax.annotation.Nullable;
@@ -57,6 +58,16 @@ public interface ClusterClientFactory<ClusterID> {
      */
     @Nullable
     ClusterID getClusterId(Configuration configuration);
+
+    /**
+     * Returns the cluster options for a given cluster id, for persisting the ClusterID.
+     *
+     * @param clusterID the cluster id.
+     * @return the cluster options for the given cluster id.
+     */
+    default ClusterInfo getClusterInfo(ClusterID clusterID) {
+        return ClusterInfo.empty();
+    }
 
     /**
      * Returns the {@link ClusterSpecification} specified by the configuration and the command line

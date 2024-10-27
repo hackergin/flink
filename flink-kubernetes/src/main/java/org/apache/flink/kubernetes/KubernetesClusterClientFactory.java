@@ -19,6 +19,7 @@
 package org.apache.flink.kubernetes;
 
 import org.apache.flink.annotation.Internal;
+import org.apache.flink.api.common.ClusterInfo;
 import org.apache.flink.client.deployment.AbstractContainerizedClusterClientFactory;
 import org.apache.flink.client.deployment.ClusterClientFactory;
 import org.apache.flink.configuration.Configuration;
@@ -68,6 +69,11 @@ public class KubernetesClusterClientFactory
     public String getClusterId(Configuration configuration) {
         checkNotNull(configuration);
         return configuration.get(KubernetesConfigOptions.CLUSTER_ID);
+    }
+
+    @Override
+    public ClusterInfo getClusterInfo(String clusterID) {
+        return ClusterInfo.of(KubernetesConfigOptions.CLUSTER_ID.key(), clusterID);
     }
 
     @Override

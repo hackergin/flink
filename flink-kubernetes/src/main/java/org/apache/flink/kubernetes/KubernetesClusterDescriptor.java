@@ -216,7 +216,9 @@ public class KubernetesClusterDescriptor implements ClusterDescriptor<String> {
 
         // No need to do pipelineJars validation if it is a PyFlink job.
         if (!(PackagedProgramUtils.isPython(applicationConfiguration.getApplicationClassName())
-                || PackagedProgramUtils.isPython(applicationConfiguration.getProgramArguments()))) {
+                || PackagedProgramUtils.isPython(applicationConfiguration.getProgramArguments())
+                || PackagedProgramUtils.isSql(
+                        applicationConfiguration.getApplicationClassName()))) {
             final List<URI> pipelineJars =
                     KubernetesUtils.checkJarFileForApplicationMode(flinkConfig);
             Preconditions.checkArgument(pipelineJars.size() == 1, "Should only have one jar");
