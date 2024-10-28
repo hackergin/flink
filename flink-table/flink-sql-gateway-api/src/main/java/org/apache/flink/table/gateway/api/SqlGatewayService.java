@@ -41,6 +41,7 @@ import org.apache.flink.table.gateway.api.utils.SqlGatewayException;
 
 import javax.annotation.Nullable;
 
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -320,6 +321,13 @@ public interface SqlGatewayService {
      * @return completion hints.
      */
     List<String> completeStatement(SessionHandle sessionHandle, String statement, int position)
+            throws SqlGatewayException;
+
+    void deployScript(
+            @Nullable Path scriptPath,
+            @Nullable String script,
+            Configuration executionConfig,
+            List<Path> artifacts)
             throws SqlGatewayException;
 
     // -------------------------------------------------------------------------------------------

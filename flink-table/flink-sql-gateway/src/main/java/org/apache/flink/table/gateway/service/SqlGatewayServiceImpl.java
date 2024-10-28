@@ -19,6 +19,9 @@
 package org.apache.flink.table.gateway.service;
 
 import org.apache.flink.annotation.VisibleForTesting;
+import org.apache.flink.client.deployment.DefaultClusterClientServiceLoader;
+import org.apache.flink.client.deployment.application.ApplicationConfiguration;
+import org.apache.flink.client.deployment.application.cli.ApplicationClusterDeployer;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.catalog.CatalogBaseTable.TableKind;
 import org.apache.flink.table.catalog.ObjectIdentifier;
@@ -39,29 +42,37 @@ import org.apache.flink.table.gateway.api.results.TableInfo;
 import org.apache.flink.table.gateway.api.session.SessionEnvironment;
 import org.apache.flink.table.gateway.api.session.SessionHandle;
 import org.apache.flink.table.gateway.api.utils.SqlGatewayException;
+import org.apache.flink.table.gateway.service.context.DefaultContext;
 import org.apache.flink.table.gateway.service.operation.OperationManager;
 import org.apache.flink.table.gateway.service.session.Session;
 import org.apache.flink.table.gateway.service.session.SessionManager;
+import org.apache.flink.table.runtime.application.SqlDriver;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
+import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.stream.Collectors;
 
+import static org.apache.flink.configuration.DeploymentOptions.TARGET;
+
 /** The implementation of the {@link SqlGatewayService} interface. */
 public class SqlGatewayServiceImpl implements SqlGatewayService {
 
     private static final Logger LOG = LoggerFactory.getLogger(SqlGatewayServiceImpl.class);
 
+    private final DefaultContext defaultContext;
     private final SessionManager sessionManager;
 
-    public SqlGatewayServiceImpl(SessionManager sessionManager) {
+    public SqlGatewayServiceImpl(DefaultContext defaultContext, SessionManager sessionManager) {
+        this.defaultContext = defaultContext;
         this.sessionManager = sessionManager;
     }
 
@@ -395,6 +406,57 @@ public class SqlGatewayServiceImpl implements SqlGatewayService {
         } catch (Throwable t) {
             LOG.error("Failed to get statement completion candidates.", t);
             throw new SqlGatewayException("Failed to get statement completion candidates.", t);
+        }
+    }
+
+    @Override
+    public void deployScript(
+            @Nullable Path scriptPath,
+            @Nullable String script,
+            Configuration executionConfig,
+            List<Path> artifacts)
+            throws SqlGatewayException {
+        if (scriptPath == null && script == null) {
+            throw new IllegalArgumentException("Please specify script path or script.");
+        }
+        Configuration mergedConfig = new Configuration();
+        mergedConfig.addAll(defaultContext.getFlinkConfig());
+        mergedConfig.addAll(executionConfig);
+
+        List<String> arguments = new ArrayList<>();
+        if (scriptPath != null) {
+            arguments.add("--scriptPath=" + scriptPath);
+        }
+        if (script != null) {
+            arguments.add("--script=" + script);
+        }
+
+        if (!artifacts.isEmpty()) {
+            switch (mergedConfig.get(TARGET).toLowerCase()) {
+                case "kubernetes-application":
+                    mergedConfig.setString(
+                            "user.artifacts.artifact-list",
+                            artifacts.stream()
+                                    .map(Path::toString)
+                                    .collect(Collectors.joining(";")));
+                    break;
+                case "yarn-application":
+                    throw new UnsupportedOperationException(
+                            "Yarn doesn't support to ship artifacts to the cluster.");
+                default:
+                    throw new UnsupportedOperationException(
+                            "Don't support to ship artifacts to unknown deployment target.");
+            }
+        }
+
+        ApplicationConfiguration applicationConfiguration =
+                new ApplicationConfiguration(
+                        arguments.toArray(new String[0]), SqlDriver.class.getName());
+        try {
+            new ApplicationClusterDeployer(new DefaultClusterClientServiceLoader())
+                    .run(mergedConfig, applicationConfiguration);
+        } catch (Exception e) {
+            throw new SqlGatewayException(e);
         }
     }
 

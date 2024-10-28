@@ -452,7 +452,7 @@ public class OperationExecutor {
                 settings.isStreamingMode());
     }
 
-    private ResultFetcher executeOperationInStatementSetState(
+    protected ResultFetcher executeOperationInStatementSetState(
             TableEnvironmentInternal tableEnv, OperationHandle handle, Operation operation) {
         if (operation instanceof EndStatementSetOperation) {
             return callEndStatementSetOperation(tableEnv, handle);
@@ -465,12 +465,12 @@ public class OperationExecutor {
         }
     }
 
-    private ResultFetcher executeOperation(
+    protected ResultFetcher executeOperation(
             TableEnvironmentInternal tableEnv,
             OperationHandle handle,
             Operation op,
             String statement,
-            CachedPlan cachedPlan) {
+            @Nullable CachedPlan cachedPlan) {
         if (op instanceof SetOperation) {
             return callSetOperation(tableEnv, handle, (SetOperation) op);
         } else if (op instanceof ResetOperation) {
