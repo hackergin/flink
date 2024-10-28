@@ -147,13 +147,13 @@ public final class KubernetesApplicationClusterEntrypoint extends ApplicationClu
             ArtifactFetchManager fetchMgr = new ArtifactFetchManager(configuration, targetDir);
 
             List<String> uris = configuration.get(PipelineOptions.JARS);
-            checkArgument(uris.size() == 1, "Should only have one jar");
+            checkArgument(uris.size() <= 1, "Should only have at most one jar");
             List<String> additionalUris =
                     configuration
                             .getOptional(ArtifactFetchOptions.ARTIFACT_LIST)
                             .orElse(Collections.emptyList());
 
-            return fetchMgr.fetchArtifacts(uris.get(0), additionalUris);
+            return fetchMgr.fetchArtifacts(uris.size() == 1 ? uris.get(0) : null, additionalUris);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
