@@ -195,8 +195,7 @@ public class MockedSqlGatewayService implements SqlGatewayService {
             SessionHandle sessionHandle,
             @org.jetbrains.annotations.Nullable Path scriptPath,
             @org.jetbrains.annotations.Nullable String script,
-            Configuration executionConfig,
-            List<Path> artifacts)
+            Configuration executionConfig)
             throws SqlGatewayException {
         throw new UnsupportedOperationException();
     }

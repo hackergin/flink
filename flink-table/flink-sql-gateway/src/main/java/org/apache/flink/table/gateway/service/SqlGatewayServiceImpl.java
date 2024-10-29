@@ -53,6 +53,7 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
+import java.net.URL;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -414,14 +415,14 @@ public class SqlGatewayServiceImpl implements SqlGatewayService {
             SessionHandle sessionHandle,
             @Nullable Path scriptPath,
             @Nullable String script,
-            Configuration executionConfig,
-            List<Path> artifacts)
+            Configuration executionConfig)
             throws SqlGatewayException {
+
+        Session session = sessionManager.getSession(sessionHandle);
         if (scriptPath == null && script == null) {
             throw new IllegalArgumentException("Please specify script path or script.");
         }
-        Configuration mergedConfig = new Configuration();
-        mergedConfig.addAll(defaultContext.getFlinkConfig());
+        Configuration mergedConfig = Configuration.fromMap(session.getSessionConfig());
         mergedConfig.addAll(executionConfig);
 
         List<String> arguments = new ArrayList<>();
@@ -432,13 +433,13 @@ public class SqlGatewayServiceImpl implements SqlGatewayService {
             arguments.add("--script=" + script);
         }
 
-        if (!artifacts.isEmpty()) {
+        if (!session.getResources().isEmpty()) {
             switch (mergedConfig.get(TARGET).toLowerCase()) {
                 case "kubernetes-application":
                     mergedConfig.setString(
                             "user.artifacts.artifact-list",
-                            artifacts.stream()
-                                    .map(Path::toString)
+                            session.getResources().stream()
+                                    .map(URL::toString)
                                     .collect(Collectors.joining(";")));
                     break;
                 case "yarn-application":

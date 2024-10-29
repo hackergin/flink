@@ -29,6 +29,10 @@ import org.apache.flink.table.gateway.service.operation.OperationManager;
 import javax.annotation.Nullable;
 
 import java.io.Closeable;
+import java.net.URL;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -75,6 +79,10 @@ public class Session implements Closeable {
 
     public OperationExecutor createExecutor(Configuration executionConfig) {
         return sessionContext.createOperationExecutor(executionConfig);
+    }
+
+    public List<URL> getResources() {
+        return new ArrayList<>(sessionContext.getSessionState().resourceManager.getResources().values());
     }
 
     @Nullable

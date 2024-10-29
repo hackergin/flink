@@ -36,7 +36,6 @@ import javax.annotation.Nullable;
 import java.nio.file.Paths;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
 
 public class DeployScriptHandler
         extends AbstractSqlGatewayRestHandler<
@@ -69,10 +68,8 @@ public class DeployScriptHandler
                                                         request.getRequestBody().getScriptPath()),
                                         request.getRequestBody().getScript(),
                                         Configuration.fromMap(
-                                                request.getRequestBody().getExecutionConfig()),
-                                        request.getRequestBody().getArtifacts().stream()
-                                                .map(Paths::get)
-                                                .collect(Collectors.toList()))
+                                                request.getRequestBody().getExecutionConfig())
+                                )
                                 .toString()));
     }
 }

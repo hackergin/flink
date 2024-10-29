@@ -327,8 +327,7 @@ public interface SqlGatewayService {
             SessionHandle sessionHandle,
             @Nullable Path scriptPath,
             @Nullable String script,
-            Configuration executionConfig,
-            List<Path> artifacts)
+            Configuration executionConfig)
             throws SqlGatewayException;
 
     // -------------------------------------------------------------------------------------------
