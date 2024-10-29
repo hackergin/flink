@@ -39,6 +39,7 @@ import org.apache.flink.table.gateway.api.session.SessionHandle;
 
 import javax.annotation.Nullable;
 
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -185,6 +186,17 @@ public class MockedSqlGatewayService implements SqlGatewayService {
     @Override
     public List<String> completeStatement(
             SessionHandle sessionHandle, String statement, int position)
+            throws SqlGatewayException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public <ClusterID> ClusterID deployScript(
+            SessionHandle sessionHandle,
+            @org.jetbrains.annotations.Nullable Path scriptPath,
+            @org.jetbrains.annotations.Nullable String script,
+            Configuration executionConfig,
+            List<Path> artifacts)
             throws SqlGatewayException {
         throw new UnsupportedOperationException();
     }

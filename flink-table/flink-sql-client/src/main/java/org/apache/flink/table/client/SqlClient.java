@@ -158,7 +158,7 @@ public class SqlClient {
             if (!hasSqlFile) {
                 cli.executeInInteractiveMode();
             } else {
-                cli.executeInNonInteractiveMode(readExecutionContent());
+                cli.executeInNonInteractiveMode(options.getSqlFile());
             }
         }
     }

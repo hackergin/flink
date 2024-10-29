@@ -323,7 +323,8 @@ public interface SqlGatewayService {
     List<String> completeStatement(SessionHandle sessionHandle, String statement, int position)
             throws SqlGatewayException;
 
-    void deployScript(
+    <ClusterID> ClusterID deployScript(
+            SessionHandle sessionHandle,
             @Nullable Path scriptPath,
             @Nullable String script,
             Configuration executionConfig,

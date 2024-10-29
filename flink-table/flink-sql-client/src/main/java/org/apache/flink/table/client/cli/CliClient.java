@@ -19,6 +19,7 @@
 package org.apache.flink.table.client.cli;
 
 import org.apache.flink.annotation.VisibleForTesting;
+import org.apache.flink.configuration.DeploymentOptions;
 import org.apache.flink.table.client.SqlClientException;
 import org.apache.flink.table.client.cli.parser.SqlClientSyntaxHighlighter;
 import org.apache.flink.table.client.cli.parser.SqlCommandParserImpl;
@@ -27,6 +28,8 @@ import org.apache.flink.table.client.config.SqlClientOptions;
 import org.apache.flink.table.client.gateway.Executor;
 import org.apache.flink.table.client.gateway.SqlExecutionException;
 
+import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.jline.reader.EndOfFileException;
 import org.jline.reader.LineReader;
 import org.jline.reader.LineReaderBuilder;
@@ -47,6 +50,8 @@ import java.io.IOError;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.function.Supplier;
@@ -125,13 +130,41 @@ public class CliClient implements AutoCloseable {
     }
 
     /** Opens the non-interactive CLI shell. */
-    public void executeInNonInteractiveMode(String content) {
+    public void executeInNonInteractiveMode(URL url) {
         try {
             terminal = terminalFactory.get();
-            executeFile(content, terminal.output(), ExecutionMode.NON_INTERACTIVE_EXECUTION);
+            if (isDeploymentApplication()) {
+                String scheme = StringUtils.lowerCase(url.getProtocol());
+                String clusterId;
+                if (scheme.equals("file")) {
+                    clusterId = executor.deployScript(readFromURL(url), null);
+                } else {
+                    clusterId = executor.deployScript(null, url);
+                }
+                terminal.writer().println("Deploy script to the cluster: " + clusterId);
+            } else {
+                executeFile(
+                        readFromURL(url),
+                        terminal.output(),
+                        ExecutionMode.NON_INTERACTIVE_EXECUTION);
+            }
         } finally {
             closeTerminal();
         }
+    }
+
+    private boolean isDeploymentApplication() {
+        final String executionTarget =
+                executor.getSessionConfig()
+                        .getOptional(DeploymentOptions.TARGET)
+                        .orElseThrow(
+                                () ->
+                                        new IllegalArgumentException(
+                                                String.format(
+                                                        "Config '%s' has to be set.",
+                                                        DeploymentOptions.TARGET.key())));
+
+        return executionTarget.trim().endsWith("application");
     }
 
     /** Initialize the Cli Client with the content. */
@@ -325,5 +358,14 @@ public class CliClient implements AutoCloseable {
             LOG.warn(msg);
         }
         return lineReader;
+    }
+
+    private String readFromURL(URL file) {
+        try {
+            return IOUtils.toString(file, StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new SqlExecutionException(
+                    String.format("Fail to read content from the %s.", file.getPath()), e);
+        }
     }
 }

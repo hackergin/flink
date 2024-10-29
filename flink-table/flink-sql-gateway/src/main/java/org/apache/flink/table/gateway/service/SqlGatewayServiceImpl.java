@@ -410,7 +410,8 @@ public class SqlGatewayServiceImpl implements SqlGatewayService {
     }
 
     @Override
-    public void deployScript(
+    public <ClusterID> ClusterID deployScript(
+            SessionHandle sessionHandle,
             @Nullable Path scriptPath,
             @Nullable String script,
             Configuration executionConfig,
@@ -453,7 +454,7 @@ public class SqlGatewayServiceImpl implements SqlGatewayService {
                 new ApplicationConfiguration(
                         arguments.toArray(new String[0]), SqlDriver.class.getName());
         try {
-            new ApplicationClusterDeployer(new DefaultClusterClientServiceLoader())
+            return new ApplicationClusterDeployer(new DefaultClusterClientServiceLoader())
                     .run(mergedConfig, applicationConfiguration);
         } catch (Exception e) {
             throw new SqlGatewayException(e);

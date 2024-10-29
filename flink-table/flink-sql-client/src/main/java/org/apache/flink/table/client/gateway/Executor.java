@@ -22,6 +22,8 @@ import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.table.gateway.rest.util.RowFormat;
 import org.apache.flink.table.gateway.service.context.DefaultContext;
 
+import javax.annotation.Nullable;
+
 import java.io.Closeable;
 import java.net.InetSocketAddress;
 import java.net.URL;
@@ -86,6 +88,8 @@ public interface Executor extends Closeable {
      * @return completion hints that fit at the current cursor position
      */
     List<String> completeStatement(String statement, int position);
+
+    String deployScript(@Nullable String script, @Nullable URL path);
 
     /** Close the {@link Executor} and process all exceptions. */
     void close();
