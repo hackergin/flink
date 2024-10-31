@@ -18,6 +18,7 @@
 
 package org.apache.flink.client.deployment;
 
+import org.apache.flink.api.common.ClusterInfo;
 import org.apache.flink.api.common.JobExecutionResult;
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.JobStatus;
@@ -55,13 +56,17 @@ public class ClusterClientJobClientAdapter<ClusterID>
 
     private final ClassLoader classLoader;
 
+    private final ClusterInfo clusterInfo;
+
     public ClusterClientJobClientAdapter(
             final ClusterClientProvider<ClusterID> clusterClientProvider,
             final JobID jobID,
-            final ClassLoader classLoader) {
+            final ClassLoader classLoader,
+            final ClusterInfo clusterInfo) {
         this.jobID = checkNotNull(jobID);
         this.clusterClientProvider = checkNotNull(clusterClientProvider);
         this.classLoader = classLoader;
+        this.clusterInfo = clusterInfo;
     }
 
     @Override
@@ -80,6 +85,11 @@ public class ClusterClientJobClientAdapter<ClusterID>
         return bridgeClientRequest(
                 clusterClientProvider,
                 (clusterClient -> clusterClient.cancel(jobID).thenApply((ignored) -> null)));
+    }
+
+    @Override
+    public ClusterInfo getClusterInfo() {
+        return clusterInfo;
     }
 
     @Override

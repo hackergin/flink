@@ -119,7 +119,9 @@ public class AbstractSessionClusterExecutor<
                                             new ClusterClientJobClientAdapter<>(
                                                     clusterClientProvider,
                                                     jobID,
-                                                    userCodeClassloader))
+                                                    userCodeClassloader,
+                                                    clusterClientFactory.getClusterInfo(
+                                                            clusterClient.getClusterId())))
                     .whenCompleteAsync(
                             (jobClient, throwable) -> {
                                 if (throwable == null) {

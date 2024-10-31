@@ -34,18 +34,15 @@ import org.apache.flink.runtime.rest.messages.ResponseBody;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.api.config.TableConfigOptions;
+import org.apache.flink.table.api.internal.TableEnvironmentInternal;
 import org.apache.flink.table.catalog.CatalogMaterializedTable;
-import org.apache.flink.table.catalog.Column;
 import org.apache.flink.table.catalog.IntervalFreshness;
 import org.apache.flink.table.catalog.ObjectIdentifier;
 import org.apache.flink.table.catalog.ResolvedCatalogBaseTable;
 import org.apache.flink.table.catalog.ResolvedCatalogMaterializedTable;
 import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.catalog.TableChange;
-import org.apache.flink.table.data.GenericMapData;
-import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
-import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.factories.WorkflowSchedulerFactoryUtil;
 import org.apache.flink.table.gateway.api.operation.OperationHandle;
 import org.apache.flink.table.gateway.api.results.ResultSet;
@@ -73,6 +70,7 @@ import org.apache.flink.table.refresh.ContinuousRefreshHandler;
 import org.apache.flink.table.refresh.ContinuousRefreshHandlerSerializer;
 import org.apache.flink.table.refresh.RefreshHandler;
 import org.apache.flink.table.refresh.RefreshHandlerSerializer;
+import org.apache.flink.table.resource.ResourceManager;
 import org.apache.flink.table.types.logical.LogicalTypeFamily;
 import org.apache.flink.table.workflow.CreatePeriodicRefreshWorkflow;
 import org.apache.flink.table.workflow.CreateRefreshWorkflow;
@@ -121,6 +119,7 @@ import static org.apache.flink.table.api.config.MaterializedTableConfigOptions.P
 import static org.apache.flink.table.api.config.MaterializedTableConfigOptions.SCHEDULE_TIME_DATE_FORMATTER_DEFAULT;
 import static org.apache.flink.table.api.internal.TableResultInternal.TABLE_RESULT_OK;
 import static org.apache.flink.table.catalog.CatalogBaseTable.TableKind.MATERIALIZED_TABLE;
+import static org.apache.flink.table.data.util.MapDataUtil.convertToJavaMap;
 import static org.apache.flink.table.factories.WorkflowSchedulerFactoryUtil.WORKFLOW_SCHEDULER_PREFIX;
 import static org.apache.flink.table.gateway.api.endpoint.SqlGatewayEndpointFactoryUtils.getEndpointConfig;
 import static org.apache.flink.table.gateway.rest.util.SqlGatewayRestAPIVersion.V3;
@@ -320,7 +319,8 @@ public class MaterializedTableManager {
                     catalogMaterializedTable,
                     materializedTableIdentifier,
                     Collections.emptyMap(),
-                    Optional.empty());
+                    Optional.empty(),
+                    Collections.emptyMap());
         } catch (Exception e) {
             // drop materialized table while submit flink streaming job occur exception. Thus, weak
             // atomicity is guaranteed
@@ -433,14 +433,19 @@ public class MaterializedTableManager {
                                 "Materialized table %s continuous refresh job has been suspended, jobId is %s.",
                                 tableIdentifier, refreshHandler.getJobId()));
             }
+            Configuration executionConfig = new Configuration();
+            executionConfig.set(TARGET, refreshHandler.getExecutionTarget());
+            refreshHandler.getClusterConfig().forEach(executionConfig::setString);
 
             String savepointPath =
-                    stopJobWithSavepoint(operationExecutor, handle, refreshHandler.getJobId());
+                    stopJobWithSavepoint(
+                            operationExecutor, executionConfig, handle, refreshHandler.getJobId());
 
             ContinuousRefreshHandler updateRefreshHandler =
                     new ContinuousRefreshHandler(
                             refreshHandler.getExecutionTarget(),
                             refreshHandler.getJobId(),
+                            refreshHandler.getClusterConfig(),
                             savepointPath);
 
             updateRefreshHandler(
@@ -565,6 +570,15 @@ public class MaterializedTableManager {
         }
 
         Optional<String> restorePath = refreshHandler.getRestorePath();
+        Map<String, String> clusterIdConfig = refreshHandler.getClusterConfig();
+        String executionTarget = refreshHandler.getExecutionTarget();
+        Map<String, String> executionConfig = new HashMap<>();
+        executionConfig.put(TARGET.key(), executionTarget);
+        // if the execution target is session, we need to add cluster id options to the execution
+        // config
+        if (executionTarget.endsWith("session")) {
+            executionConfig.putAll(clusterIdConfig);
+        }
         try {
             executeContinuousRefreshJob(
                     operationExecutor,
@@ -572,7 +586,8 @@ public class MaterializedTableManager {
                     catalogMaterializedTable,
                     tableIdentifier,
                     dynamicOptions,
-                    restorePath);
+                    restorePath,
+                    executionConfig);
         } catch (Exception e) {
             throw new SqlExecutionException(
                     String.format(
@@ -635,7 +650,8 @@ public class MaterializedTableManager {
             CatalogMaterializedTable catalogMaterializedTable,
             ObjectIdentifier materializedTableIdentifier,
             Map<String, String> dynamicOptions,
-            Optional<String> restorePath) {
+            Optional<String> restorePath,
+            Map<String, String> executionConfig) {
         // Set job name, runtime mode, checkpoint interval
         // TODO: Set minibatch related optimization options.
         Configuration customConfig = new Configuration();
@@ -646,6 +662,9 @@ public class MaterializedTableManager {
         customConfig.set(NAME, jobName);
         customConfig.set(RUNTIME_MODE, STREAMING);
         restorePath.ifPresent(s -> customConfig.set(SAVEPOINT_PATH, s));
+
+        // set execution target and cluster info
+        executionConfig.forEach(customConfig::setString);
 
         // Do not override the user-defined checkpoint interval
         if (!operationExecutor
@@ -667,14 +686,21 @@ public class MaterializedTableManager {
         if (isApplicationMode(operationExecutor.getSessionContext().getSessionConf())) {
             // generate a jobId
             JobID jobId = JobID.generate();
-            Map<String, String> executionConfig = new HashMap<>();
-            executionConfig.put(PIPELINE_FIXED_JOB_ID.key(), jobId.toString());
+            Map<String, String> applicationConfig = new HashMap<>();
+            applicationConfig.put(PIPELINE_FIXED_JOB_ID.key(), jobId.toString());
             try {
-                String clusterId = deployApplicationJob(insertStatement, executionConfig);
+                applicationConfig.putAll(customConfig.toMap());
+                applicationConfig.putAll(executionConfig);
+                String clusterId = deployApplicationJob(insertStatement, applicationConfig);
                 // update refresh handler
-                String executeTarget = operationExecutor.getSessionContext().getSessionConf().get(TARGET);
+                String executeTarget = operationExecutor
+                        .getSessionContext()
+                        .getSessionConf()
+                        .get(TARGET);
+                Map<String, String> clusterInfo = new HashMap<>();
+                clusterInfo.put("kubernetes.cluster-id", clusterId);
                 ContinuousRefreshHandler continuousRefreshHandler = new ContinuousRefreshHandler(
-                        "", clusterId, jobId.toString());
+                        executeTarget, jobId.toHexString(), clusterInfo);
                 byte[] serializedBytes = serializeContinuousHandler(continuousRefreshHandler);
 
                 updateRefreshHandler(
@@ -686,33 +712,36 @@ public class MaterializedTableManager {
                         continuousRefreshHandler.asSummaryString(),
                         serializedBytes);
             } catch (Exception e) {
-                throw new RuntimeException(e);
+                throw new RuntimeException(
+                        "Failed to deploy continuous job, please check the configuration and try again.", e);
             }
         } else {
-            // submit flink streaming job
-            ResultFetcher resultFetcher =
-                    operationExecutor.executeStatement(handle, customConfig, insertStatement);
+                // get execution.target and jobId, currently doesn't support yarn and k8s, so doesn't
+                // get clusterId
+            ResultFetcher resultFetcher = operationExecutor.executeStatement(handle, customConfig, insertStatement);
+                List<RowData> results = fetchAllResults(resultFetcher);
+                String jobId = results.get(0).getString(0).toString();
+                //        MapData mapData = results.get(0).getMap(1);
+                //
+                String executeTarget = operationExecutor.getSessionContext().getSessionConf().get(TARGET);
+                Map<String, String> clusterIdConfig = new HashMap<>();
+                convertToJavaMap(
+                        results.get(0).getMap(1),
+                        DataTypes.STRING().getLogicalType(),
+                        DataTypes.STRING().getLogicalType())
+                        .forEach((k, v) -> clusterIdConfig.put(k.toString(), v.toString()));
+                ContinuousRefreshHandler continuousRefreshHandler =
+                        new ContinuousRefreshHandler(executeTarget, jobId, clusterIdConfig);
+                byte[] serializedBytes = serializeContinuousHandler(continuousRefreshHandler);
 
-            // get execution.target and jobId, currently doesn't support yarn and k8s, so doesn't
-            // get clusterId
-            List<RowData> results = fetchAllResults(resultFetcher);
-            String jobId = results.get(0).getString(0).toString();
-            String executeTarget = operationExecutor
-                    .getSessionContext()
-                    .getSessionConf()
-                    .get(TARGET);
-            ContinuousRefreshHandler continuousRefreshHandler =
-                    new ContinuousRefreshHandler(executeTarget, jobId);
-            byte[] serializedBytes = serializeContinuousHandler(continuousRefreshHandler);
-
-            updateRefreshHandler(
-                    operationExecutor,
-                    handle,
-                    materializedTableIdentifier,
-                    catalogMaterializedTable,
-                    CatalogMaterializedTable.RefreshStatus.ACTIVATED,
-                    continuousRefreshHandler.asSummaryString(),
-                    serializedBytes);
+                updateRefreshHandler(
+                        operationExecutor,
+                        handle,
+                        materializedTableIdentifier,
+                        catalogMaterializedTable,
+                        CatalogMaterializedTable.RefreshStatus.ACTIVATED,
+                        continuousRefreshHandler.asSummaryString(),
+                        serializedBytes);
         }
     }
 
@@ -795,26 +824,7 @@ public class MaterializedTableManager {
             ResultFetcher resultFetcher =
                     operationExecutor.executeStatement(handle, customConfig, insertStatement);
 
-            List<RowData> results = fetchAllResults(resultFetcher);
-            String jobId = results.get(0).getString(0).toString();
-            String executeTarget =
-                    operationExecutor.getSessionContext().getSessionConf().get(TARGET);
-            Map<StringData, StringData> clusterInfo = new HashMap<>();
-            clusterInfo.put(
-                    StringData.fromString(TARGET.key()), StringData.fromString(executeTarget));
-            // TODO get clusterId
-
-            return ResultFetcher.fromResults(
-                    handle,
-                    ResolvedSchema.of(
-                            Column.physical(JOB_ID, DataTypes.STRING()),
-                            Column.physical(
-                                    CLUSTER_INFO,
-                                    DataTypes.MAP(DataTypes.STRING(), DataTypes.STRING()))),
-                    Collections.singletonList(
-                            GenericRowData.of(
-                                    StringData.fromString(jobId),
-                                    new GenericMapData(clusterInfo))));
+            return resultFetcher;
         } catch (Exception e) {
             throw new SqlExecutionException(
                     String.format(
@@ -999,7 +1009,10 @@ public class MaterializedTableManager {
         JobStatus jobStatus = getJobStatus(operationExecutor, handle, refreshHandler);
         if (!jobStatus.isTerminalState()) {
             try {
-                cancelJob(operationExecutor, handle, refreshHandler.getJobId());
+                Configuration executionConfig = new Configuration();
+                executionConfig.set(TARGET, refreshHandler.getExecutionTarget());
+                refreshHandler.getClusterConfig().forEach(executionConfig::setString);
+                cancelJob(operationExecutor, executionConfig, handle, refreshHandler.getJobId());
             } catch (Exception e) {
                 jobStatus = getJobStatus(operationExecutor, handle, refreshHandler);
                 if (!jobStatus.isTerminalState()) {
@@ -1098,15 +1111,23 @@ public class MaterializedTableManager {
     }
 
     private static void cancelJob(
-            OperationExecutor operationExecutor, OperationHandle handle, String jobId) {
+            OperationExecutor operationExecutor,
+            Configuration customConfig,
+            OperationHandle handle,
+            String jobId) {
+        ResourceManager resourceManager =
+                operationExecutor.getSessionContext().getSessionState().resourceManager.copy();
+        TableEnvironmentInternal tableEnv =
+                operationExecutor.getTableEnvironment(resourceManager, customConfig);
         operationExecutor.callStopJobOperation(
-                operationExecutor.getTableEnvironment(),
-                handle,
-                new StopJobOperation(jobId, false, false));
+                tableEnv, handle, new StopJobOperation(jobId, false, false));
     }
 
     private static String stopJobWithSavepoint(
-            OperationExecutor executor, OperationHandle handle, String jobId) {
+            OperationExecutor executor,
+            Configuration customConfig,
+            OperationHandle handle,
+            String jobId) {
         // check savepoint dir is configured
         Optional<String> savepointDir =
                 executor.getSessionContext().getSessionConf().getOptional(SAVEPOINT_DIRECTORY);
@@ -1114,11 +1135,13 @@ public class MaterializedTableManager {
             throw new ValidationException(
                     "Savepoint directory is not configured, can't stop job with savepoint.");
         }
+        ResourceManager resourceManager =
+                executor.getSessionContext().getSessionState().resourceManager.copy();
+        TableEnvironmentInternal tableEnv =
+                executor.getTableEnvironment(resourceManager, customConfig);
         ResultFetcher resultFetcher =
                 executor.callStopJobOperation(
-                        executor.getTableEnvironment(),
-                        handle,
-                        new StopJobOperation(jobId, true, false));
+                        tableEnv, handle, new StopJobOperation(jobId, true, false));
         List<RowData> results = fetchAllResults(resultFetcher);
         return results.get(0).getString(0).toString();
     }

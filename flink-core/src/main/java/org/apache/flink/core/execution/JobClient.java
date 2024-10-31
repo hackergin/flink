@@ -19,6 +19,7 @@
 package org.apache.flink.core.execution;
 
 import org.apache.flink.annotation.PublicEvolving;
+import org.apache.flink.api.common.ClusterInfo;
 import org.apache.flink.api.common.JobExecutionResult;
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.JobStatus;
@@ -40,6 +41,10 @@ public interface JobClient {
 
     /** Cancels the associated job. */
     CompletableFuture<Void> cancel();
+
+    default ClusterInfo getClusterInfo() {
+        return ClusterInfo.empty();
+    }
 
     /**
      * Stops the associated job on Flink cluster.

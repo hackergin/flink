@@ -125,7 +125,8 @@ public final class KubernetesApplicationClusterEntrypoint extends ApplicationClu
 
         // No need to do pipelineJars validation if it is a PyFlink job.
         if (!(PackagedProgramUtils.isPython(jobClassName)
-                || PackagedProgramUtils.isPython(programArguments))) {
+                || PackagedProgramUtils.isPython(programArguments)
+                || PackagedProgramUtils.isSql(jobClassName))) {
             final ArtifactFetchManager.Result fetchRes = fetchArtifacts(configuration);
 
             return DefaultPackagedProgramRetriever.create(

@@ -19,6 +19,7 @@
 package org.apache.flink.client.deployment.application;
 
 import org.apache.flink.annotation.PublicEvolving;
+import org.apache.flink.api.common.ClusterInfo;
 import org.apache.flink.api.common.JobExecutionResult;
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.JobStatus;
@@ -51,6 +52,11 @@ public class WebSubmissionJobClient implements JobClient {
     @Override
     public JobID getJobID() {
         return jobId;
+    }
+
+    @Override
+    public ClusterInfo getClusterInfo() {
+        return ClusterInfo.empty();
     }
 
     @Override

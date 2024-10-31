@@ -18,6 +18,7 @@
 
 package org.apache.flink.runtime.minicluster;
 
+import org.apache.flink.api.common.ClusterInfo;
 import org.apache.flink.api.common.JobExecutionResult;
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.JobStatus;
@@ -83,6 +84,11 @@ public final class MiniClusterJobClient implements JobClient, CoordinationReques
     @Override
     public JobID getJobID() {
         return jobID;
+    }
+
+    @Override
+    public ClusterInfo getClusterInfo() {
+        return ClusterInfo.empty();
     }
 
     @Override
