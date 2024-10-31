@@ -20,9 +20,17 @@ package org.apache.flink.table.gateway.service.materializedtable;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.annotation.VisibleForTesting;
+import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.JobStatus;
+import org.apache.flink.client.program.rest.UrlPrefixDecorator;
 import org.apache.flink.configuration.CheckpointingOptions;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.runtime.rest.RestClient;
+import org.apache.flink.runtime.rest.messages.CustomHeadersDecorator;
+import org.apache.flink.runtime.rest.messages.MessageHeaders;
+import org.apache.flink.runtime.rest.messages.MessageParameters;
+import org.apache.flink.runtime.rest.messages.RequestBody;
+import org.apache.flink.runtime.rest.messages.ResponseBody;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.api.config.TableConfigOptions;
@@ -41,7 +49,13 @@ import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.factories.WorkflowSchedulerFactoryUtil;
 import org.apache.flink.table.gateway.api.operation.OperationHandle;
 import org.apache.flink.table.gateway.api.results.ResultSet;
+import org.apache.flink.table.gateway.api.session.SessionHandle;
 import org.apache.flink.table.gateway.rest.SqlGatewayRestEndpointFactory;
+import org.apache.flink.table.gateway.rest.header.application.DeployScriptHeaders;
+import org.apache.flink.table.gateway.rest.message.application.DeployScriptRequestBody;
+import org.apache.flink.table.gateway.rest.message.application.DeployScriptResponseBody;
+import org.apache.flink.table.gateway.rest.message.session.SessionMessageParameters;
+import org.apache.flink.table.gateway.rest.util.SqlGatewayRestAPIVersion;
 import org.apache.flink.table.gateway.rest.util.SqlGatewayRestOptions;
 import org.apache.flink.table.gateway.service.operation.OperationExecutor;
 import org.apache.flink.table.gateway.service.result.ResultFetcher;
@@ -68,12 +82,17 @@ import org.apache.flink.table.workflow.ResumeRefreshWorkflow;
 import org.apache.flink.table.workflow.SuspendRefreshWorkflow;
 import org.apache.flink.table.workflow.WorkflowScheduler;
 
+import org.apache.flink.util.Preconditions;
+import org.apache.flink.util.concurrent.Executors;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
 import java.io.IOException;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.net.URLClassLoader;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -85,6 +104,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TimeZone;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
 import static org.apache.flink.api.common.RuntimeExecutionMode.BATCH;
@@ -93,6 +114,7 @@ import static org.apache.flink.configuration.CheckpointingOptions.SAVEPOINT_DIRE
 import static org.apache.flink.configuration.DeploymentOptions.TARGET;
 import static org.apache.flink.configuration.ExecutionOptions.RUNTIME_MODE;
 import static org.apache.flink.configuration.PipelineOptions.NAME;
+import static org.apache.flink.configuration.PipelineOptionsInternal.PIPELINE_FIXED_JOB_ID;
 import static org.apache.flink.configuration.StateRecoveryOptions.SAVEPOINT_PATH;
 import static org.apache.flink.table.api.config.MaterializedTableConfigOptions.DATE_FORMATTER;
 import static org.apache.flink.table.api.config.MaterializedTableConfigOptions.PARTITION_FIELDS;
@@ -101,6 +123,7 @@ import static org.apache.flink.table.api.internal.TableResultInternal.TABLE_RESU
 import static org.apache.flink.table.catalog.CatalogBaseTable.TableKind.MATERIALIZED_TABLE;
 import static org.apache.flink.table.factories.WorkflowSchedulerFactoryUtil.WORKFLOW_SCHEDULER_PREFIX;
 import static org.apache.flink.table.gateway.api.endpoint.SqlGatewayEndpointFactoryUtils.getEndpointConfig;
+import static org.apache.flink.table.gateway.rest.util.SqlGatewayRestAPIVersion.V3;
 import static org.apache.flink.table.gateway.service.utils.Constants.CLUSTER_INFO;
 import static org.apache.flink.table.gateway.service.utils.Constants.JOB_ID;
 import static org.apache.flink.table.utils.DateTimeUtils.formatTimestampStringWithOffset;
@@ -119,11 +142,20 @@ public class MaterializedTableManager {
 
     private final String restEndpointUrl;
 
+    private final URL gatewayUrl;
+
+    private final RestClient restClient;
+
+    private final SessionHandle sessionHandle;
+
     public MaterializedTableManager(
-            Configuration configuration, URLClassLoader userCodeClassLoader) {
+            Configuration configuration, URLClassLoader userCodeClassLoader, SessionHandle sessionHandle) {
         this.userCodeClassLoader = userCodeClassLoader;
         this.restEndpointUrl = buildRestEndpointUrl(configuration);
+        this.gatewayUrl = buildGatewayUrl(restEndpointUrl);
         this.workflowScheduler = buildWorkflowScheduler(configuration, userCodeClassLoader);
+        this.restClient = buildRestClient(configuration);
+        this.sessionHandle = sessionHandle;
     }
 
     private String buildRestEndpointUrl(Configuration configuration) {
@@ -133,13 +165,83 @@ public class MaterializedTableManager {
         String address = restEndpointConfig.get(SqlGatewayRestOptions.ADDRESS);
         int port = restEndpointConfig.get(SqlGatewayRestOptions.PORT);
 
+
         return String.format("http://%s:%s", address, port);
+    }
+
+    private URL buildGatewayUrl(String restEndpointUrl) {
+        try {
+            return new URL(restEndpointUrl);
+        } catch (MalformedURLException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     private WorkflowScheduler<? extends RefreshHandler> buildWorkflowScheduler(
             Configuration configuration, URLClassLoader userCodeClassLoader) {
         return WorkflowSchedulerFactoryUtil.createWorkflowScheduler(
                 configuration, userCodeClassLoader);
+    }
+
+    private RestClient buildRestClient(Configuration configuration) {
+        try {
+            return new RestClient(configuration, Executors.directExecutor());
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private String deployApplicationJob(String script, Map<String, String> executionConfig) throws Exception {
+        DeployScriptResponseBody deployScriptResponseBody = sendRequest(
+                DeployScriptHeaders.getInstance(),
+                new SessionMessageParameters(sessionHandle),
+                new DeployScriptRequestBody(
+                        script,
+                        null,
+                        executionConfig,
+                        Collections.emptyList())).get();
+
+        return deployScriptResponseBody.getClusterID();
+    }
+
+    private <
+            M extends MessageHeaders<R, P, U>,
+            U extends MessageParameters,
+            R extends RequestBody,
+            P extends ResponseBody>
+    CompletableFuture<P> sendRequest(M messageHeaders, U messageParameters, R request) {
+        SqlGatewayRestAPIVersion connectionVersion = V3;
+        Preconditions.checkNotNull(connectionVersion, "The connection version should not be null.");
+        CustomHeadersDecorator<R, P, U> headers =
+                new CustomHeadersDecorator<>(
+                        new UrlPrefixDecorator<>(messageHeaders, gatewayUrl.getPath()));
+//        headers.setCustomHeaders(customHttpHeaders);
+
+        return sendRequest(headers, messageParameters, request, connectionVersion);
+    }
+
+    private <
+            M extends MessageHeaders<R, P, U>,
+            U extends MessageParameters,
+            R extends RequestBody,
+            P extends ResponseBody>
+    CompletableFuture<P> sendRequest(
+            M messageHeaders,
+            U messageParameters,
+            R request,
+            SqlGatewayRestAPIVersion connectionVersion) {
+        try {
+            return restClient.sendRequest(
+                    gatewayUrl.getHost(),
+                    gatewayUrl.getPort(),
+                    messageHeaders,
+                    messageParameters,
+                    request,
+                    Collections.emptyList(),
+                    connectionVersion);
+        } catch (IOException ioException) {
+            throw new SqlExecutionException("Failed to connect to the SQL Gateway.", ioException);
+        }
     }
 
     public void open() throws Exception {
@@ -560,27 +662,63 @@ public class MaterializedTableManager {
                         materializedTableIdentifier,
                         catalogMaterializedTable.getDefinitionQuery(),
                         dynamicOptions);
-        // submit flink streaming job
-        ResultFetcher resultFetcher =
-                operationExecutor.executeStatement(handle, customConfig, insertStatement);
 
-        // get execution.target and jobId, currently doesn't support yarn and k8s, so doesn't
-        // get clusterId
-        List<RowData> results = fetchAllResults(resultFetcher);
-        String jobId = results.get(0).getString(0).toString();
-        String executeTarget = operationExecutor.getSessionContext().getSessionConf().get(TARGET);
-        ContinuousRefreshHandler continuousRefreshHandler =
-                new ContinuousRefreshHandler(executeTarget, jobId);
-        byte[] serializedBytes = serializeContinuousHandler(continuousRefreshHandler);
+        // we need to deploy continuous job to application mode
+        if (isApplicationMode(operationExecutor.getSessionContext().getSessionConf())) {
+            // generate a jobId
+            JobID jobId = JobID.generate();
+            Map<String, String> executionConfig = new HashMap<>();
+            executionConfig.put(PIPELINE_FIXED_JOB_ID.key(), jobId.toString());
+            try {
+                String clusterId = deployApplicationJob(insertStatement, executionConfig);
+                // update refresh handler
+                String executeTarget = operationExecutor.getSessionContext().getSessionConf().get(TARGET);
+                ContinuousRefreshHandler continuousRefreshHandler = new ContinuousRefreshHandler(
+                        "", clusterId, jobId.toString());
+                byte[] serializedBytes = serializeContinuousHandler(continuousRefreshHandler);
 
-        updateRefreshHandler(
-                operationExecutor,
-                handle,
-                materializedTableIdentifier,
-                catalogMaterializedTable,
-                CatalogMaterializedTable.RefreshStatus.ACTIVATED,
-                continuousRefreshHandler.asSummaryString(),
-                serializedBytes);
+                updateRefreshHandler(
+                        operationExecutor,
+                        handle,
+                        materializedTableIdentifier,
+                        catalogMaterializedTable,
+                        CatalogMaterializedTable.RefreshStatus.ACTIVATED,
+                        continuousRefreshHandler.asSummaryString(),
+                        serializedBytes);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        } else {
+            // submit flink streaming job
+            ResultFetcher resultFetcher =
+                    operationExecutor.executeStatement(handle, customConfig, insertStatement);
+
+            // get execution.target and jobId, currently doesn't support yarn and k8s, so doesn't
+            // get clusterId
+            List<RowData> results = fetchAllResults(resultFetcher);
+            String jobId = results.get(0).getString(0).toString();
+            String executeTarget = operationExecutor
+                    .getSessionContext()
+                    .getSessionConf()
+                    .get(TARGET);
+            ContinuousRefreshHandler continuousRefreshHandler =
+                    new ContinuousRefreshHandler(executeTarget, jobId);
+            byte[] serializedBytes = serializeContinuousHandler(continuousRefreshHandler);
+
+            updateRefreshHandler(
+                    operationExecutor,
+                    handle,
+                    materializedTableIdentifier,
+                    catalogMaterializedTable,
+                    CatalogMaterializedTable.RefreshStatus.ACTIVATED,
+                    continuousRefreshHandler.asSummaryString(),
+                    serializedBytes);
+        }
+    }
+
+    private boolean isApplicationMode(Configuration configuration) {
+        String target = configuration.get(TARGET);
+        return target.endsWith("application");
     }
 
     private ResultFetcher callAlterMaterializedTableRefreshOperation(

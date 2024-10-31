@@ -341,7 +341,8 @@ public class SessionContext {
     protected static SessionState initializeSessionState(
             SessionEnvironment environment,
             Configuration configuration,
-            ResourceManager resourceManager) {
+            ResourceManager resourceManager,
+            SessionHandle sessionHandle) {
         final ModuleManager moduleManager =
                 buildModuleManager(
                         environment, configuration, resourceManager.getUserClassLoader());
@@ -353,7 +354,7 @@ public class SessionContext {
         final FunctionCatalog functionCatalog =
                 new FunctionCatalog(configuration, resourceManager, catalogManager, moduleManager);
         final MaterializedTableManager materializedTableManager =
-                new MaterializedTableManager(configuration, resourceManager.getUserClassLoader());
+                new MaterializedTableManager(configuration, resourceManager.getUserClassLoader(), sessionHandle);
         return new SessionState(
                 catalogManager,
                 moduleManager,

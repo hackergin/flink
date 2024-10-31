@@ -109,7 +109,8 @@ public class SqlRunner {
                             new ResourceManager(
                                     sessionConfig,
                                     (MutableURLClassLoader)
-                                            Thread.currentThread().getContextClassLoader())),
+                                            Thread.currentThread().getContextClassLoader()),
+                            sessionId),
                     new OperationManager(Executors.newDirectExecutorService()));
         }
 

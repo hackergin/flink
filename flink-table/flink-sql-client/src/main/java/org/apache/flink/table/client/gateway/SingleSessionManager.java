@@ -151,7 +151,7 @@ public class SingleSessionManager implements SessionManager {
                     environment.getSessionEndpointVersion(),
                     configuration,
                     userClassLoader,
-                    initializeSessionState(environment, configuration, resourceManager),
+                    initializeSessionState(environment, configuration, resourceManager, sessionId),
                     new OperationManager(operationExecutorService));
         }
 
