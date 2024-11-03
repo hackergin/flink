@@ -49,10 +49,10 @@ public class DeployScriptRequestBody implements RequestBody {
 
     @JsonCreator
     public DeployScriptRequestBody(
-            @Nullable String script,
-            @Nullable String scriptPath,
-            Map<String, String> executionConfig,
-            List<String> artifacts) {
+            @JsonProperty(FIELD_NAME_SCRIPT) @Nullable String script,
+            @JsonProperty(FIELD_NAME_SCRIPT_PATH) @Nullable String scriptPath,
+            @JsonProperty(FIELD_NAME_EXECUTION_CONFIG) Map<String, String> executionConfig,
+            @JsonProperty(FIELD_NAME_ARTIFACTS) List<String> artifacts) {
         this.script = script;
         this.scriptPath = scriptPath;
         this.executionConfig = executionConfig;

@@ -41,6 +41,7 @@ import org.apache.flink.table.operations.Operation;
 import org.apache.flink.table.operations.QueryOperation;
 import org.apache.flink.util.CloseableIterator;
 
+import org.jetbrains.annotations.Nullable;
 import org.jline.reader.Candidate;
 import org.jline.reader.LineReader;
 import org.jline.reader.LineReaderBuilder;
@@ -56,6 +57,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -463,6 +465,11 @@ class CliClientTest {
             receivedStatement = statement;
             receivedPosition = position;
             return Arrays.asList(helper.getSqlParser().getCompletionHints(statement, position));
+        }
+
+        @Override
+        public String deployScript(@Nullable String script, @Nullable URL path) {
+            return null;
         }
 
         @Override

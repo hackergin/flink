@@ -26,10 +26,12 @@ import org.apache.flink.table.client.gateway.StatementResult;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.util.CloseableIterator;
 
+import org.jetbrains.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.net.URL;
 import java.nio.file.Path;
 import java.sql.ResultSet;
 import java.sql.SQLFeatureNotSupportedException;
@@ -248,6 +250,11 @@ public class FlinkStatementTest extends FlinkJdbcDriverTestBase {
 
         @Override
         public List<String> completeStatement(String statement, int position) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public String deployScript(@Nullable String script, @Nullable URL path) {
             throw new UnsupportedOperationException();
         }
 

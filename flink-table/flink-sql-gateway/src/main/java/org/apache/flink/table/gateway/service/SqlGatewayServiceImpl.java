@@ -69,11 +69,9 @@ public class SqlGatewayServiceImpl implements SqlGatewayService {
 
     private static final Logger LOG = LoggerFactory.getLogger(SqlGatewayServiceImpl.class);
 
-    private final DefaultContext defaultContext;
     private final SessionManager sessionManager;
 
-    public SqlGatewayServiceImpl(DefaultContext defaultContext, SessionManager sessionManager) {
-        this.defaultContext = defaultContext;
+    public SqlGatewayServiceImpl(SessionManager sessionManager) {
         this.sessionManager = sessionManager;
     }
 

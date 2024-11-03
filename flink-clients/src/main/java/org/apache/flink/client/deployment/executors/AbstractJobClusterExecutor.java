@@ -19,6 +19,7 @@
 package org.apache.flink.client.deployment.executors;
 
 import org.apache.flink.annotation.Internal;
+import org.apache.flink.api.common.ClusterInfo;
 import org.apache.flink.api.dag.Pipeline;
 import org.apache.flink.client.cli.ExecutionConfigAccessor;
 import org.apache.flink.client.deployment.ClusterClientFactory;
@@ -84,9 +85,11 @@ public class AbstractJobClusterExecutor<
                             clusterSpecification, jobGraph, configAccessor.getDetachedMode());
             LOG.info("Job has been submitted with JobID " + jobGraph.getJobID());
 
+            ClusterInfo clusterInfo = clusterClientFactory.getClusterInfo(clusterClientProvider.getClusterClient()
+                    .getClusterId());
             return CompletableFuture.completedFuture(
                     new ClusterClientJobClientAdapter<>(
-                            clusterClientProvider, jobGraph.getJobID(), userCodeClassloader));
+                            clusterClientProvider, jobGraph.getJobID(), userCodeClassloader, clusterInfo));
         }
     }
 }

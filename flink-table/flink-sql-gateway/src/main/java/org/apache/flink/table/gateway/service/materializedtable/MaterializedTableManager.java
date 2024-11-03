@@ -214,7 +214,7 @@ public class MaterializedTableManager {
         CustomHeadersDecorator<R, P, U> headers =
                 new CustomHeadersDecorator<>(
                         new UrlPrefixDecorator<>(messageHeaders, gatewayUrl.getPath()));
-//        headers.setCustomHeaders(customHttpHeaders);
+        headers.setCustomHeaders(messageHeaders.getCustomHeaders());
 
         return sendRequest(headers, messageParameters, request, connectionVersion);
     }

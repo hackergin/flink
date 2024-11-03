@@ -153,6 +153,23 @@ public class CliClient implements AutoCloseable {
         }
     }
 
+    public void executeInNonInteractiveMode(String script) {
+        try {
+            terminal = terminalFactory.get();
+            if (isDeploymentApplication()) {
+                String clusterId = executor.deployScript(script, null);
+                terminal.writer().println("Deploy script to the cluster: " + clusterId);
+            } else {
+                executeFile(
+                        script,
+                        terminal.output(),
+                        ExecutionMode.NON_INTERACTIVE_EXECUTION);
+            }
+        } finally {
+            closeTerminal();
+        }
+    }
+
     private boolean isDeploymentApplication() {
         final String executionTarget =
                 executor.getSessionConfig()

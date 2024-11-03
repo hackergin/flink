@@ -66,7 +66,7 @@ public class ContinuousRefreshHandler implements RefreshHandler, Serializable {
     }
 
     public Map<String, String> getClusterConfig() {
-        return clusterConfig;
+        return clusterInfo;
     }
 
     public Optional<String> getRestorePath() {
