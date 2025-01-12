@@ -61,6 +61,7 @@ public class ScriptRunner {
                                         SqlGatewayRestAPIVersion.getDefaultVersion())
                                 .build(),
                         Executors.newDirectExecutorService());
+        sessionContext.open();
         try (AutoCloseable ignore = sessionContext::close) {
             new ScriptExecutor(sessionContext, new Printer(outputStream)).execute(script);
         }
