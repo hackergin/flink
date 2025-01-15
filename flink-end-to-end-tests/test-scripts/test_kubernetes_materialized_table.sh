@@ -41,7 +41,8 @@ S3_TEST_DATA_WORDS_URI="s3://$IT_CASE_S3_BUCKET/"
 MATERIALIZED_TABLE_DATA_DIR="${S3_TEST_DATA_WORDS_URI}"
 
 # replace s3 endpoint with real ip
-set_config_key "s3.endpoint" "${S3_ENDPOINT//localhost/$(get_host_machine_address)}"
+
+set_config_key "s3.endpoint" "${S3_ENDPOINT//localhost/host.minikube.internal}"
 
 function internal_cleanup {
     kubectl delete deployment ${APPLICATION_CLUSTER_ID}
