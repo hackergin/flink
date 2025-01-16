@@ -36,13 +36,19 @@ cp $TEST_FILE_SYSTEM_JAR ${FLINK_DIR}/lib/
 # setup materialized table data dir
 echo "[INFO] Start S3 env"
 s3_setup hadoop
-IT_CASE_S3_BUCKET=test-data
 S3_TEST_DATA_WORDS_URI="s3://$IT_CASE_S3_BUCKET/"
 MATERIALIZED_TABLE_DATA_DIR="${S3_TEST_DATA_WORDS_URI}"
 
+
+echo "[INFO] Start SQL Gateway"
+set_config_key "sql-gateway.endpoint.rest.address" "localhost"
+start_sql_gateway
+
+SQL_GATEWAY_REST_PORT=8083
+
 # replace s3 endpoint with real ip
 
-set_config_key "s3.endpoint" "${S3_ENDPOINT//localhost/host.minikube.internal}"
+set_config_key "s3.endpoint" "${S3_ENDPOINT//localhost/$(get_host_machine_address)}"
 
 function internal_cleanup {
     kubectl delete deployment ${APPLICATION_CLUSTER_ID}
@@ -57,13 +63,6 @@ if ! retry_times $IMAGE_BUILD_RETRIES $IMAGE_BUILD_BACKOFF "build_image ${FLINK_
 fi
 
 kubectl create clusterrolebinding ${CLUSTER_ROLE_BINDING} --clusterrole=edit --serviceaccount=default:default --namespace=default
-
-
-echo "[INFO] Start SQL Gateway"
-set_config_key "sql-gateway.endpoint.rest.address" "localhost"
-start_sql_gateway
-
-SQL_GATEWAY_REST_PORT=8083
 
 function open_session() {
   local session_options=$1
