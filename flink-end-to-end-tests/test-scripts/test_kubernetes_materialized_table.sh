@@ -28,9 +28,10 @@ LOCAL_LOGS_PATH="${TEST_DATA_DIR}/log"
 IMAGE_BUILD_RETRIES=3
 IMAGE_BUILD_BACKOFF=2
 
-# copy test-filesystem jar
+# copy test-filesystem jar & hadoop plugin
 TEST_FILE_SYSTEM_JAR=`ls ${END_TO_END_DIR}/../flink-test-utils-parent/flink-table-filesystem-test-utils/target/flink-table-filesystem-test-utils-*.jar`
 cp $TEST_FILE_SYSTEM_JAR ${FLINK_DIR}/lib/
+add_optional_plugin "s3-fs-hadoop"
 
 # start kubernetes
 start_kubernetes
