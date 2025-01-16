@@ -18,7 +18,6 @@
 #
 
 source "$(dirname "$0")"/common_kubernetes.sh
-source "$(dirname "$0")"/common_s3_minio.sh
 
 CURRENT_DIR=`cd "$(dirname "$0")" && pwd -P`
 CLUSTER_ROLE_BINDING="flink-role-binding-default"
@@ -33,8 +32,19 @@ IMAGE_BUILD_BACKOFF=2
 TEST_FILE_SYSTEM_JAR=`ls ${END_TO_END_DIR}/../flink-test-utils-parent/flink-table-filesystem-test-utils/target/flink-table-filesystem-test-utils-*.jar`
 cp $TEST_FILE_SYSTEM_JAR ${FLINK_DIR}/lib/
 
+# start kubernetes
+start_kubernetes
+kubectl create clusterrolebinding ${CLUSTER_ROLE_BINDING} --clusterrole=edit --serviceaccount=default:default --namespace=default
+
+# build image
+if ! retry_times $IMAGE_BUILD_RETRIES $IMAGE_BUILD_BACKOFF "build_image ${FLINK_IMAGE_NAME} $(get_host_machine_address)"; then
+ 	echo "ERROR: Could not build image. Aborting..."
+ 	exit 1
+fi
+
 # setup materialized table data dir
 echo "[INFO] Start S3 env"
+source "$(dirname "$0")"/common_s3_minio.sh
 s3_setup hadoop
 S3_TEST_DATA_WORDS_URI="s3://$IT_CASE_S3_BUCKET/"
 MATERIALIZED_TABLE_DATA_DIR="${S3_TEST_DATA_WORDS_URI}"
@@ -46,23 +56,10 @@ start_sql_gateway
 
 SQL_GATEWAY_REST_PORT=8083
 
-# replace s3 endpoint with real ip
-
-set_config_key "s3.endpoint" "${S3_ENDPOINT//localhost/$(get_host_machine_address)}"
-
 function internal_cleanup {
     kubectl delete deployment ${APPLICATION_CLUSTER_ID}
     kubectl delete clusterrolebinding ${CLUSTER_ROLE_BINDING}
 }
-
-start_kubernetes
-
-if ! retry_times $IMAGE_BUILD_RETRIES $IMAGE_BUILD_BACKOFF "build_image ${FLINK_IMAGE_NAME} $(get_host_machine_address)"; then
- 	echo "ERROR: Could not build image. Aborting..."
- 	exit 1
-fi
-
-kubectl create clusterrolebinding ${CLUSTER_ROLE_BINDING} --clusterrole=edit --serviceaccount=default:default --namespace=default
 
 function open_session() {
   local session_options=$1
@@ -193,6 +190,7 @@ function create_filesystem_source() {
     echo $create_source_result
 }
 
+S3_ENDPOINT=${S3_ENDPOINT//localhost/$(get_host_machine_address)}
 echo "[INFO] Create Materialized Table in Application Mode"
 session_options="{\"table.catalog-store.kind\": \"file\",
                  \"execution.target\": \"kubernetes-application\",
@@ -200,6 +198,7 @@ session_options="{\"table.catalog-store.kind\": \"file\",
                  \"kubernetes.container.image.ref\": \"${FLINK_IMAGE_NAME}\",
                  \"table.catalog-store.file.path\": \"$MATERIALIZED_TABLE_DATA_DIR/\",
                  \"kubernetes.rest-service.exposed.type\": \"NodePort\",
+                 \"s3.endpoint\": \"$S3_ENDPOINT\",
                  \"workflow-scheduler.type\": \"embedded\"}"
 
 session_handle=$(open_session "$session_options")
